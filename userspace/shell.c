@@ -901,7 +901,7 @@ static void execute(char* cmd, int allow_exec) {
     } else if (strcmp(cmd, "touch") == 0) {
         printf("touch: missing file operand\n");
     } else if (strcmp(cmd, "uname") == 0) {
-        printf("some-tiny-os some-tiny-os 0.4 x86_64 some-tiny-os\n");
+        printf("some-tiny-os some-tiny-os 0.5 x86_64 some-tiny-os\n");
     } else if (startswith(cmd, "export")) {
         cmd_export(cmd + 6);
     } else if (startswith(cmd, "unset ")) {
