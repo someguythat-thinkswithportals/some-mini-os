@@ -12,9 +12,15 @@ task_t* current_task;
 static task_t* task_list;
 static uint32_t next_pid;
 
+#ifdef __x86_64__
 volatile uint64_t* pending_switch;
 volatile uint64_t pending_rsp;
 volatile uint64_t pending_cr3;
+#else
+volatile uint32_t* pending_switch;
+volatile uint32_t pending_rsp;
+volatile uint32_t pending_cr3;
+#endif
 
 void signal_init_task(task_t* task) {
     for (int i = 0; i < NSIGS; i++)
@@ -100,10 +106,11 @@ int task_create(const char* name, void (*entry)(void)) {
     }
     signal_init_task(task);
 
-    task->stack_base = (uint64_t)memory_alloc(STACK_SIZE);
+    task->stack_base = (uintptr_t)memory_alloc(STACK_SIZE);
     if (!task->stack_base) return -1;
     memory_set((void*)task->stack_base, 0, STACK_SIZE);
 
+#ifdef __x86_64__
     uint64_t* sp = (uint64_t*)(task->stack_base + STACK_SIZE);
     *--sp = 0x10;
     *--sp = task->stack_base + STACK_SIZE - 256;
@@ -114,6 +121,18 @@ int task_create(const char* name, void (*entry)(void)) {
     *--sp = 0;
     for (int j = 0; j < 15; j++) *--sp = 0;
     task->rsp = (uint64_t)sp;
+#else
+    uint32_t* sp = (uint32_t*)(task->stack_base + STACK_SIZE);
+    *--sp = 0x10;
+    *--sp = task->stack_base + STACK_SIZE - 256;
+    *--sp = 0x202;
+    *--sp = 0x08;
+    *--sp = (uint32_t)entry;
+    *--sp = 0;
+    *--sp = 0;
+    for (int j = 0; j < 8; j++) *--sp = 0;
+    task->rsp = (uint32_t)sp;
+#endif
 
     task_t* last = task_list;
     while (last->next != task_list) last = last->next;
@@ -140,14 +159,24 @@ void scheduler_tick(void) {
     current_task = next;
     current_task->state = TASK_RUNNING;
 
+#ifdef __x86_64__
     tss_set_rsp0(next->stack_base + STACK_SIZE);
+#else
+    tss_set_esp0(next->stack_base + STACK_SIZE);
+#endif
 
     pending_switch = &old->rsp;
     pending_rsp = next->rsp;
     pending_cr3 = next->cr3;
 }
 
-int sys_fork(uint64_t parent_rsp, uint64_t parent_cr3, registers_t* r) {
+int sys_fork(
+#ifdef __x86_64__
+    uint64_t parent_rsp, uint64_t parent_cr3,
+#else
+    uint32_t parent_rsp, uint32_t parent_cr3,
+#endif
+    registers_t* r) {
     if (task_count >= MAX_TASKS) return -1;
 
     task_t* parent = current_task;
@@ -172,15 +201,19 @@ int sys_fork(uint64_t parent_rsp, uint64_t parent_cr3, registers_t* r) {
     child->trampoline_addr = parent->trampoline_addr;
     child->in_signal = 0;
 
-    child->stack_base = (uint64_t)memory_alloc(STACK_SIZE);
+    child->stack_base = (uintptr_t)memory_alloc(STACK_SIZE);
     if (!child->stack_base) return -1;
     memory_copy((void*)child->stack_base, (void*)parent->stack_base, STACK_SIZE);
 
-    uint64_t offset = parent_rsp - parent->stack_base;
+    uintptr_t offset = parent_rsp - parent->stack_base;
     child->rsp = child->stack_base + offset;
 
-    registers_t* child_r = (registers_t*)(child->stack_base + ((uint64_t)r - (uint64_t)parent->stack_base));
+    registers_t* child_r = (registers_t*)(child->stack_base + ((uintptr_t)r - (uintptr_t)parent->stack_base));
+#ifdef __x86_64__
     child_r->rax = 0;
+#else
+    child_r->eax = 0;
+#endif
 
     child->cr3 = paging_create();
     if (!child->cr3) {
@@ -334,11 +367,18 @@ void signal_deliver(registers_t* r) {
         } else if (handler == SIG_IGN) {
             continue;
         } else {
+#ifdef __x86_64__
             task->saved_rip = r->rip;
             task->saved_rsp = r->rsp;
             task->saved_rflags = r->rflags;
+#else
+            task->saved_rip = r->eip;
+            task->saved_rsp = r->esp;
+            task->saved_rflags = r->eflags;
+#endif
             task->in_signal = 1;
 
+#ifdef __x86_64__
             uint64_t sp = r->rsp - 8;
             uint64_t page = sp & ~0xFFFULL;
             uint64_t flags = paging_get_flags(task->cr3, page);
@@ -357,6 +397,26 @@ void signal_deliver(registers_t* r) {
             r->rsp = sp;
             r->rdi = sig;
             r->rflags &= ~0x100;
+#else
+            uint32_t sp = r->esp - 4;
+            uint32_t page = sp & ~0xFFF;
+            uint32_t flags = paging_get_flags(task->cr3, page);
+            if (!(flags & PAGE_PRESENT)) {
+                uint32_t phys = (uint32_t)memory_alloc_page();
+                if (phys) {
+                    memory_set((void*)phys, 0, 4096);
+                    paging_map_4kb(task->cr3, page, phys,
+                                   PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                }
+            }
+            uint32_t* user_sp = (uint32_t*)sp;
+            *user_sp = task->trampoline_addr;
+
+            r->eip = handler;
+            r->esp = sp;
+            r->ebx = sig;
+            r->eflags &= ~0x100;
+#endif
             return;
         }
     }

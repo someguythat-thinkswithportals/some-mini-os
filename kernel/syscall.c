@@ -17,6 +17,7 @@
 
 
 static void syscall_handler(registers_t* r) {
+#ifdef __x86_64__
     switch (r->rax) {
         case 0: {
             int fd = (int)r->rdi;
@@ -72,7 +73,7 @@ static void syscall_handler(registers_t* r) {
             if (old_cr3 != 0x1000)
                 paging_destroy(old_cr3);
             r->rip = entry;
-            r->rsp = 0x500000;
+            r->rsp = 0x510000;
             r->cs = 0x1B;
             r->ss = 0x23;
             r->rflags = 0x202;
@@ -139,7 +140,7 @@ static void syscall_handler(registers_t* r) {
                 paging_destroy(old_cr3);
 
             r->rip = entry;
-            r->rsp = 0x500000;
+            r->rsp = 0x510000;
             r->cs = 0x1B;
             r->ss = 0x23;
             r->rflags = 0x202;
@@ -352,6 +353,343 @@ sbrk_done:
             r->rax = -1;
             break;
     }
+#else
+    switch (r->eax) {
+        case 0: {
+            int fd = (int)r->ebx;
+            if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_WRITE) {
+                r->eax = pipe_write((pipe_t*)current_task->fd_data[fd],
+                                    (const char*)r->ecx, (int)r->edx);
+            } else if (fd == 1 || fd == 2) {
+                vga_write((const char*)r->ecx, r->edx);
+                serial_write((const char*)r->ecx, r->edx);
+                r->eax = r->edx;
+            } else {
+                r->eax = -1;
+            }
+            break;
+        }
+        case 1: {
+            int fd = (int)r->ebx;
+            if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_READ) {
+                r->eax = pipe_read((pipe_t*)current_task->fd_data[fd],
+                                   (char*)r->ecx, (int)r->edx);
+            } else if (fd == 0) {
+                *(char*)r->ecx = keyboard_read();
+                r->eax = 1;
+            } else {
+                r->eax = -1;
+            }
+            break;
+        }
+        case 2:
+            timer_sleep(r->ebx);
+            r->eax = 0;
+            break;
+        case 3:
+            r->eax = timer_ticks();
+            break;
+        case 4:
+            vga_clear(VGA_BLACK);
+            r->eax = 0;
+            break;
+        case 5: {
+            const char* filename = "shell";
+            uint32_t new_cr3 = paging_create();
+            if (!new_cr3) { r->eax = -1; break; }
+            uint32_t entry;
+            if (elf_load_into_address_space(new_cr3, filename, &entry) < 0) {
+                paging_destroy(new_cr3);
+                r->eax = -1;
+                break;
+            }
+            uint32_t old_cr3 = current_task->cr3;
+            current_task->cr3 = new_cr3;
+            paging_switch(new_cr3);
+            if (old_cr3 != 0x1000)
+                paging_destroy(old_cr3);
+            r->eip = entry;
+            r->esp = 0x510000;
+            r->cs = 0x1B;
+            r->ss = 0x23;
+            r->eflags = 0x202;
+            r->eax = 0;
+            break;
+        }
+        case 6:
+            r->eax = fs_ls((const char*)r->ebx, (char*)r->ecx, r->edx);
+            break;
+        case 7:
+            r->eax = fs_cd((const char*)r->ecx);
+            break;
+        case 8:
+            r->eax = fs_cat((const char*)r->ebx, (char*)r->ecx, r->edx);
+            break;
+        case 9:
+            {
+                uint8_t good = 0x02;
+                while (good & 0x02) good = inb(0x64);
+                outb(0x64, 0xFE);
+            }
+            r->eax = 0;
+            break;
+        case 10:
+            outw(0x604, 0x2000);
+            outw(0xB004, 0x2000);
+            __asm__ volatile("cli; hlt");
+            r->eax = 0;
+            break;
+        case 11:
+            serial_write((const char*)r->ebx, r->ecx);
+            r->eax = r->ecx;
+            break;
+        case 12:
+            r->eax = fs_mkdir((const char*)r->ebx);
+            break;
+        case 13:
+            r->eax = fs_rmdir((const char*)r->ebx);
+            break;
+        case 14:
+            r->eax = fs_delete((const char*)r->ebx);
+            break;
+        case 15:
+            r->eax = fs_rename((const char*)r->ebx, (const char*)r->ecx);
+            break;
+        case 16:
+            r->eax = fs_copy((const char*)r->ebx, (const char*)r->ecx);
+            break;
+        case 17: {
+            const char* filename = (const char*)r->ebx;
+            uint32_t new_cr3 = paging_create();
+            if (!new_cr3) { r->eax = -1; break; }
+            uint32_t entry;
+            if (elf_load_into_address_space(new_cr3, filename, &entry) < 0) {
+                paging_destroy(new_cr3);
+                r->eax = -1;
+                break;
+            }
+            uint32_t old_cr3 = current_task->cr3;
+            current_task->cr3 = new_cr3;
+            paging_switch(new_cr3);
+
+            if (old_cr3 != 0x1000)
+                paging_destroy(old_cr3);
+
+            r->eip = entry;
+            r->esp = 0x510000;
+            r->cs = 0x1B;
+            r->ss = 0x23;
+            r->eflags = 0x202;
+            r->eax = 0;
+            break;
+        }
+        case 18: {
+            rtc_datetime_t dt;
+            cmos_read_datetime(&dt);
+            char* buf = (char*)r->ebx;
+            uint32_t size = r->ecx;
+            if (size >= 20) {
+                buf[0] = '0' + (dt.year / 1000) % 10;
+                buf[1] = '0' + (dt.year / 100) % 10;
+                buf[2] = '0' + (dt.year / 10) % 10;
+                buf[3] = '0' + dt.year % 10;
+                buf[4] = '-';
+                buf[5] = '0' + dt.month / 10;
+                buf[6] = '0' + dt.month % 10;
+                buf[7] = '-';
+                buf[8] = '0' + dt.day / 10;
+                buf[9] = '0' + dt.day % 10;
+                buf[10] = ' ';
+                buf[11] = '0' + dt.hour / 10;
+                buf[12] = '0' + dt.hour % 10;
+                buf[13] = ':';
+                buf[14] = '0' + dt.minute / 10;
+                buf[15] = '0' + dt.minute % 10;
+                buf[16] = ':';
+                buf[17] = '0' + dt.second / 10;
+                buf[18] = '0' + dt.second % 10;
+                buf[19] = '\n';
+                r->eax = 20;
+            } else {
+                r->eax = 0;
+            }
+            break;
+        }
+        case 19: {
+            uint32_t current_esp;
+            __asm__ volatile("mov %%esp, %0" : "=r"(current_esp));
+            r->eax = sys_fork(current_esp, current_task->cr3, r);
+            break;
+        }
+        case 20:
+            sys_exit((int)r->ebx);
+            r->eax = 0;
+            break;
+        case 21:
+            r->eax = sys_waitpid((uint32_t)r->ebx);
+            break;
+        case 22: {
+            int32_t increment = (int32_t)r->ebx;
+            static uint32_t heap_break = 0x510000;
+            uint32_t old_break = heap_break;
+
+            if (increment < 0) {
+                int32_t new_break = (int32_t)heap_break + increment;
+                if (new_break < 0x510000) new_break = 0x510000;
+                heap_break = (uint32_t)new_break;
+            } else if (increment > 0) {
+                uint32_t new_break = heap_break + (uint32_t)increment;
+                uint32_t page_aligned_old = (heap_break + 0xFFF) & ~0xFFF;
+                uint32_t page_aligned_new = (new_break + 0xFFF) & ~0xFFF;
+
+                if (page_aligned_new > page_aligned_old) {
+                    for (uint32_t page = page_aligned_old; page < page_aligned_new; page += 0x1000) {
+                        if (page >= 0x600000) {
+                            r->eax = (uint32_t)-1;
+                            goto sbrk_done;
+                        }
+                        uint32_t page_phys = (uint32_t)memory_alloc_page();
+                        if (!page_phys) {
+                            r->eax = (uint32_t)-1;
+                            goto sbrk_done;
+                        }
+                        memory_set((void*)page_phys, 0, 4096);
+                        paging_map_4kb(current_task->cr3, page, page_phys,
+                                       PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                    }
+                }
+                heap_break = new_break;
+            }
+            r->eax = old_break;
+sbrk_done:
+            break;
+        }
+        case 23: {
+            int free1 = -1, free2 = -1;
+            for (int i = 3; i < MAX_FDS; i++) {
+                if (current_task->fd_type[i] == 0) {
+                    if (free1 == -1) free1 = i;
+                    else { free2 = i; break; }
+                }
+            }
+            if (free1 == -1 || free2 == -1) {
+                r->eax = -1;
+                break;
+            }
+            pipe_t* p = pipe_create();
+            if (!p) {
+                r->eax = -1;
+                break;
+            }
+            current_task->fd_type[free1] = FD_PIPE_READ;
+            current_task->fd_data[free1] = p;
+            current_task->fd_type[free2] = FD_PIPE_WRITE;
+            current_task->fd_data[free2] = p;
+            pipe_ref_inc(p, 0);
+            pipe_ref_inc(p, 1);
+            int* user_fds = (int*)r->ebx;
+            user_fds[0] = free1;
+            user_fds[1] = free2;
+            r->eax = 0;
+            break;
+        }
+        case 24: {
+            int oldfd = (int)r->ebx;
+            int newfd = (int)r->ecx;
+            if (oldfd < 0 || oldfd >= MAX_FDS || newfd < 0 || newfd >= MAX_FDS) {
+                r->eax = -1;
+                break;
+            }
+            if (current_task->fd_type[oldfd] == 0) {
+                r->eax = -1;
+                break;
+            }
+            if (oldfd == newfd) {
+                r->eax = newfd;
+                break;
+            }
+            if (current_task->fd_type[newfd] != 0) {
+                pipe_ref_dec((pipe_t*)current_task->fd_data[newfd],
+                             current_task->fd_type[newfd] == FD_PIPE_READ ? 0 : 1);
+            }
+            current_task->fd_type[newfd] = current_task->fd_type[oldfd];
+            current_task->fd_data[newfd] = current_task->fd_data[oldfd];
+            pipe_ref_inc((pipe_t*)current_task->fd_data[newfd],
+                         current_task->fd_type[newfd] == FD_PIPE_READ ? 0 : 1);
+            r->eax = newfd;
+            break;
+        }
+        case 25: {
+            int fd = (int)r->ebx;
+            if (fd < 0 || fd >= MAX_FDS || fd < 3) {
+                r->eax = -1;
+                break;
+            }
+            if (current_task->fd_type[fd] == FD_PIPE_READ)
+                pipe_close_end(current_task->fd_data[fd], 0);
+            else if (current_task->fd_type[fd] == FD_PIPE_WRITE)
+                pipe_close_end(current_task->fd_data[fd], 1);
+            current_task->fd_type[fd] = 0;
+            current_task->fd_data[fd] = 0;
+            r->eax = 0;
+            break;
+        }
+        case 26: {
+            int sig = (int)r->ebx;
+            uint32_t handler = r->ecx;
+            uint32_t trampoline = r->edx;
+            if (sig < 1 || sig >= NSIGS) {
+                r->eax = -1;
+                break;
+            }
+            current_task->signal_handlers[sig] = handler;
+            if (trampoline)
+                current_task->trampoline_addr = trampoline;
+            r->eax = 0;
+            break;
+        }
+        case 27:
+            r->eax = sys_kill((uint32_t)r->ebx, (int)r->ecx);
+            break;
+        case 28: {
+            r->eip = current_task->saved_rip;
+            r->esp = current_task->saved_rsp;
+            r->eflags = current_task->saved_rflags;
+            r->cs = 0x1B;
+            r->ss = 0x23;
+            current_task->in_signal = 0;
+            r->eax = 0;
+            break;
+        }
+        case 29:
+            r->eax = fs_create((const char*)r->ebx);
+            break;
+        case 30: {
+            size_t cr, cc;
+            vga_getpos(&cr, &cc);
+            r->eax = (cr << 16) | cc;
+            break;
+        }
+        case 31: {
+            vga_setpos(r->ebx, r->ecx);
+            r->eax = 0;
+            break;
+        }
+        case 32: {
+            const char* path = (const char*)r->ebx;
+            const char* data = (const char*)r->ecx;
+            uint32_t len = (uint32_t)r->edx;
+            r->eax = fs_write_file(path, data, len);
+            break;
+        }
+        case 33:
+            r->eax = keyboard_data();
+            break;
+        default:
+            r->eax = -1;
+            break;
+    }
+#endif
 }
 
 void syscall_init(void) {

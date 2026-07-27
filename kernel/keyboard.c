@@ -186,7 +186,7 @@ int keyboard_read(void) {
             if (c == 0x7F) c = '\b';
             return c;
         }
-        __asm__ volatile("hlt");
+        __asm__ volatile("sti; hlt");
     }
     int c = (unsigned char)buf[tail];
     tail = (tail + 1) % BUF_SIZE;

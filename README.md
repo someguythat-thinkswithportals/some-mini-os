@@ -24,20 +24,21 @@ if you have linux you can type this into the terminal:
 
 ```bash
 # debian/ubuntu
-sudo apt install make, gcc, nasm, qemu-system-x86-64
+sudo apt install make gcc nasm qemu-system-x86-64 qemu-system-i386
 
 # arch linux
-sudo pacman -S qemu-system-x86_64 make gcc nasm
+sudo pacman -S qemu-system-x86_64 make gcc nasm qemu-system-i386
 ```
 if you use windows you can use the windows subsystem for linux (wsl) to compile the operating system
 
 anyways, after you installed all of the essential software, its time to compile the OS and run it inside of QEMU
 
+if you want to compile the x86_64 version of the operating system
 ```bash
 git clone https://github.com/someguythat-thinkswithportals/some-tiny-os.git
 cd some-tiny-os
 make all
-qemu-system-x86_64 some-tiny-os.img
+qemu-system-x86_64 some-tiny-os-x86_64.img
 ```
 alternatively you can do this to compile it and run it inside of QEMU
 
@@ -46,12 +47,30 @@ git clone https://github.com/someguythat-thinkswithportals/some-tiny-os.git
 cd some-tiny-os
 make run
 ```
+if you want to compile the i386 version of some-tiny-os
+
+```bash
+git clone https://github.com/someguythat-thinkswithportals/some-tiny-os.git
+cd some-tiny-os
+make i386
+qemu-system-i386 some-tiny-os-i386.img
+```
+or you can do this
+```bash
+git clone https://github.com/someguythat-thinkswithportals/some-tiny-os.git
+cd some-tiny-os
+make-i386
+```
+
 ## available make flags
 ```bash
 make all # builds everything
 make run # builds everything and runs in qemu
 make run-serial # same thing as make run but it has serial stuff
 make kernel # builds the kernel
+make i386 # builds a i386 version of some-tiny-os
+make run-i386 # same thing as make i386 but it runs in qemu
+make run-serial-i386 # same thing as make run-serial but its for i386, must compile the i386 version of some-tiny-os before running make run-serial-i386
 make clean
 ```
 # license

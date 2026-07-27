@@ -325,6 +325,7 @@ static void shell_execute(void) {
                     shell_write("exec: file not found or too large\n");
                     memory_free(buf);
                 } else {
+#ifdef __x86_64__
                     uint64_t entry;
                     if (elf_load(buf, &entry) < 0) {
                         shell_write("exec: invalid ELF\n");
@@ -336,7 +337,7 @@ static void shell_execute(void) {
                             "cli\n"
                             "movq $0x9000, %%rsp\n"
                             "pushq $0x23\n"
-                            "pushq $0x500000\n"
+                            "pushq $0x510000\n"
                             "pushq $0x202\n"
                             "pushq $0x1B\n"
                             "pushq %0\n"
@@ -344,6 +345,27 @@ static void shell_execute(void) {
                             : : "r"(entry) : "memory"
                         );
                     }
+#else
+                    uint32_t entry;
+                    if (elf_load(buf, &entry) < 0) {
+                        shell_write("exec: invalid ELF\n");
+                        memory_free(buf);
+                    } else {
+                        memory_free(buf);
+                        tss_set_esp0(0x9000);
+                        __asm__ volatile(
+                            "cli\n"
+                            "movl $0x9000, %%esp\n"
+                            "pushl $0x23\n"
+                            "pushl $0x510000\n"
+                            "pushl $0x202\n"
+                            "pushl $0x1B\n"
+                            "pushl %0\n"
+                            "iret\n"
+                            : : "r"(entry) : "memory"
+                        );
+                    }
+#endif
                 }
             }
         }

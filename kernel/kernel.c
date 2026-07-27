@@ -18,16 +18,25 @@ static void idle_task(void) {
     }
 }
 
+#ifdef __x86_64__
 static uint64_t userspace_entry;
+#else
+static uint32_t userspace_entry;
+#endif
 
 static void load_userspace(void) {
+#ifdef __x86_64__
     uint64_t new_cr3 = paging_create();
+    uint64_t entry;
+#else
+    uint32_t new_cr3 = paging_create();
+    uint32_t entry;
+#endif
     if (!new_cr3) {
         serial_write("FAILED to create shell address space\n", 37);
         return;
     }
 
-    uint64_t entry;
     if (elf_load_into_address_space(new_cr3, "/bin/shell", &entry) < 0) {
         serial_write("FAILED to load shell.elf from filesystem\n", 40);
         paging_destroy(new_cr3);
@@ -40,27 +49,43 @@ static void load_userspace(void) {
     serial_write("Shell loaded from filesystem\n", 28);
 }
 
+#ifdef __x86_64__
 static void dump_hex64_serial(uint64_t v) {
     for (int i = 60; i >= 0; i -= 4) {
         uint8_t nib = (v >> i) & 0xF;
         serial_putchar(nib < 10 ? '0' + nib : 'a' + nib - 10);
     }
 }
+#else
+static void dump_hex32_serial(uint32_t v) {
+    for (int i = 28; i >= 0; i -= 4) {
+        uint8_t nib = (v >> i) & 0xF;
+        serial_putchar(nib < 10 ? '0' + nib : 'a' + nib - 10);
+    }
+}
+#endif
 
 static void go_userspace(void) {
     serial_write("go_userspace: entering\n", 22);
+#ifdef __x86_64__
     tss_set_rsp0(0x9000);
     serial_write("go_userspace: tss_set_rsp0 done, cr3=", 37);
     dump_hex64_serial(current_task->cr3);
+#else
+    tss_set_esp0(0x9000);
+    serial_write("go_userspace: tss_set_esp0 done, cr3=", 38);
+    dump_hex32_serial(current_task->cr3);
+#endif
     serial_putchar('\n');
     paging_switch(current_task->cr3);
     serial_write("go_userspace: paging_switch done\n", 33);
 
+#ifdef __x86_64__
     __asm__ volatile(
         "cli\n"
         "movq $0x9000, %%rsp\n"
         "pushq $0x23\n"
-        "pushq $0x500000\n"
+        "pushq $0x510000\n"
         "pushq $0x202\n"
         "pushq $0x1B\n"
         "pushq %0\n"
@@ -68,11 +93,25 @@ static void go_userspace(void) {
         : : "r"(userspace_entry) : "memory"
     );
     serial_write("go_userspace: after iretq (should not reach)\n", 44);
+#else
+    __asm__ volatile(
+        "cli\n"
+        "movl $0x9000, %%esp\n"
+        "pushl $0x23\n"
+        "pushl $0x510000\n"
+        "pushl $0x202\n"
+        "pushl $0x1B\n"
+        "pushl %0\n"
+        "iret\n"
+        : : "r"(userspace_entry) : "memory"
+    );
+    serial_write("go_userspace: after iret (should not reach)\n", 43);
+#endif
 }
 
 void kmain(void) {
     serial_init();
-    serial_write("some-tiny-os v0.2 booting...\n", 29);
+    serial_write("some-tiny-os v0.5 booting...\n", 29);
 
     vga_init();
     vga_setcolor(VGA_LIGHT_GREY);

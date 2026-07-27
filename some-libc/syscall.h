@@ -38,6 +38,7 @@
 #define SYS_WRITE_FILE 32
 #define SYS_KEYDATA    33
 
+#ifdef __x86_64__
 static inline int64_t _syscall(uint64_t num, uint64_t a0, uint64_t a1, uint64_t a2) {
     int64_t ret;
     __asm__ volatile(
@@ -64,5 +65,33 @@ static inline int64_t _syscall2(uint64_t num, uint64_t a0, uint64_t a1) {
 static inline int64_t _syscall3(uint64_t num, uint64_t a0, uint64_t a1, uint64_t a2) {
     return _syscall(num, a0, a1, a2);
 }
+#else
+static inline int32_t _syscall(uint32_t num, uint32_t a0, uint32_t a1, uint32_t a2) {
+    int32_t ret;
+    __asm__ volatile(
+        "int $0x80"
+        : "=a" (ret)
+        : "a" (num), "b" (a0), "c" (a1), "d" (a2)
+        : "memory"
+    );
+    return ret;
+}
+
+static inline int32_t _syscall0(uint32_t num) {
+    return _syscall(num, 0, 0, 0);
+}
+
+static inline int32_t _syscall1(uint32_t num, uint32_t a0) {
+    return _syscall(num, a0, 0, 0);
+}
+
+static inline int32_t _syscall2(uint32_t num, uint32_t a0, uint32_t a1) {
+    return _syscall(num, a0, a1, 0);
+}
+
+static inline int32_t _syscall3(uint32_t num, uint32_t a0, uint32_t a1, uint32_t a2) {
+    return _syscall(num, a0, a1, a2);
+}
+#endif
 
 #endif
