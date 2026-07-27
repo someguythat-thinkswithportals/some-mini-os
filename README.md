@@ -70,7 +70,7 @@ make run-serial # same thing as make run but it has serial stuff
 make kernel # builds the kernel
 make i386 # builds a i386 version of some-tiny-os
 make run-i386 # same thing as make i386 but it runs in qemu
-make run-serial-i386 # same thing as make run-serial but its for i386, must compile the i386 version of some-tiny-os before running make run-serial-i386
+make run-serial-i386 # same thing as make run-serial but its for i386
 make clean
 ```
 # license

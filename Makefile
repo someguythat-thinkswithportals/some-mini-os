@@ -51,10 +51,12 @@ i386:
 	$(MAKE) clean
 	$(MAKE) all ARCH=i386
 
-run-i386: all
+run-i386:
+	$(MAKE) all ARCH=i386
 	qemu-system-i386 -drive format=raw,file=some-tiny-os-i386.img -m 64M
 
-run-serial-i386: all
+run-serial-i386:
+	$(MAKE) all ARCH=i386
 	qemu-system-i386 -drive format=raw,file=some-tiny-os-i386.img -m 64M -serial stdio
 
 boot/boot.bin: boot/boot.asm
