@@ -137,6 +137,9 @@ void task_close_fds(task_t* task) {
             pipe_close_end(task->fd_data[i], 1);
             task->fd_type[i] = 0;
             task->fd_data[i] = 0;
+        } else if (task->fd_type[i] == FD_DEVICE) {
+            task->fd_type[i] = 0;
+            task->fd_data[i] = 0;
         }
     }
 }
@@ -150,5 +153,7 @@ void task_copy_fds(task_t* dst, task_t* src) {
             pipe_ref_inc((pipe_t*)src->fd_data[i], 0);
         else if (src->fd_type[i] == FD_PIPE_WRITE)
             pipe_ref_inc((pipe_t*)src->fd_data[i], 1);
+        else if (src->fd_type[i] == FD_DEVICE) {
+        }
     }
 }

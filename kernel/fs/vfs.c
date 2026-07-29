@@ -1,5 +1,6 @@
 #include "vfs.h"
 #include "tinyfs.h"
+#include "devices.h"
 #include "../memory.h"
 #include "../serial.h"
 
@@ -26,6 +27,10 @@ static int is_dir(tinyfs_inode_t* inode) {
 
 static int is_file(tinyfs_inode_t* inode) {
     return (inode->mode & 0xF000) == TINYFS_TYPE_FILE;
+}
+
+static int is_chardev(tinyfs_inode_t* inode) {
+    return (inode->mode & 0xF000) == TINYFS_TYPE_CHARDEV;
 }
 
 static int find_dirent(uint32_t dir_inum, const char* name, uint32_t* out_inum) {
@@ -492,14 +497,22 @@ int fs_copy(const char* src, const char* dst) {
 int fs_write_file(const char* path, const char* data, uint32_t len) {
     if (!path || path[0] == 0) return -1;
 
-    fs_delete(path);
-
-    if (fs_create(path) < 0) return -1;
-
     uint32_t inum;
     if (resolve_path(path, &inum) < 0) return -1;
 
     tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    if (is_chardev(&inode)) {
+        return dev_dispatch_write(inode.uid, inode.size, data, len);
+    }
+
+    fs_delete(path);
+
+    if (fs_create(path) < 0) return -1;
+
+    if (resolve_path(path, &inum) < 0) return -1;
+
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
 
     if (len == 0) return 0;
@@ -553,6 +566,11 @@ int fs_cat(const char* name, char* buf, int buf_size) {
 
     tinyfs_inode_t inode;
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    if (is_chardev(&inode)) {
+        return dev_dispatch_read(inode.uid, inode.size, buf, buf_size);
+    }
+
     if (!is_file(&inode)) return -1;
 
     if (inode.size == 0) return 0;
@@ -605,4 +623,19 @@ int fs_cat(const char* name, char* buf, int buf_size) {
     memory_free(block);
     buf[pos] = 0;
     return pos;
+}
+
+int fs_open(const char* path, int flags) {
+    (void)flags;
+    if (!path || path[0] == 0) return -1;
+
+    uint32_t inum;
+    if (resolve_path(path, &inum) < 0) return -1;
+
+    tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    if (!is_chardev(&inode)) return -1;
+
+    return (int)inum;
 }

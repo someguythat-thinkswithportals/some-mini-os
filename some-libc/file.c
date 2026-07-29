@@ -129,6 +129,10 @@ int fgetc(FILE* f) {
     return (unsigned char)f->buf[f->pos++];
 }
 
+int open(const char* path, int flags) {
+    return (int)_syscall2(SYS_OPEN, (uint64_t)path, (uint64_t)flags);
+}
+
 int fseek(FILE* f, long offset, int whence) {
     if (!f) return -1;
     switch (whence) {

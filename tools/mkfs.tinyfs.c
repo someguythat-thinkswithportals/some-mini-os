@@ -13,6 +13,7 @@
 
 #define TINYFS_TYPE_DIR     0x4000
 #define TINYFS_TYPE_FILE    0x8000
+#define TINYFS_TYPE_CHARDEV 0x2000
 #define TINYFS_MODE_755     0x01ED
 
 #define SUPER_BLOCK         TINYFS_BOOT_BLOCKS
@@ -100,6 +101,7 @@ int main(int argc, char* argv[]) {
     uint8_t* inode_bitmap = calloc(1, TINYFS_BLOCK_SIZE * 4);
     if (!inode_bitmap) { perror("calloc"); return 1; }
     inode_bitmap[0] = 0xFF;  /* inodes 0,1,2,3,4,5,6,7 */
+    inode_bitmap[1] = 0x07;  /* inodes 8,9,10 */
     write_at(fd, INODE_BITMAP_BLOCK * TINYFS_BLOCK_SIZE, inode_bitmap, TINYFS_BLOCK_SIZE * 4);
     free(inode_bitmap);
 
@@ -159,7 +161,7 @@ int main(int argc, char* argv[]) {
     /* Inode 5: dev directory */
     inodes[5].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[5].uid = 0;
-    inodes[5].size = 2 * sizeof(tinyfs_dirent_t);
+    inodes[5].size = 5 * sizeof(tinyfs_dirent_t);
     inodes[5].direct_block = ROOT_DATA_BLOCK + 5;
     inodes[5].refcount = 1;
 
@@ -176,6 +178,24 @@ int main(int argc, char* argv[]) {
     inodes[7].size = 2 * sizeof(tinyfs_dirent_t);
     inodes[7].direct_block = ROOT_DATA_BLOCK + 7;
     inodes[7].refcount = 1;
+
+    /* Inode 8: /dev/null - char device major 1 minor 3 */
+    inodes[8].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
+    inodes[8].uid = 1;
+    inodes[8].size = 3;
+    inodes[8].refcount = 1;
+
+    /* Inode 9: /dev/zero - char device major 1 minor 5 */
+    inodes[9].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
+    inodes[9].uid = 1;
+    inodes[9].size = 5;
+    inodes[9].refcount = 1;
+
+    /* Inode 10: /dev/tty - char device major 5 minor 0 */
+    inodes[10].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
+    inodes[10].uid = 5;
+    inodes[10].size = 0;
+    inodes[10].refcount = 1;
 
     write_at(fd, INODE_TABLE_BLOCK * TINYFS_BLOCK_SIZE, inode_table, TINYFS_BLOCK_SIZE * INODE_TABLE_BLOCKS);
     free(inode_table);
@@ -217,10 +237,13 @@ int main(int argc, char* argv[]) {
     write_at(fd, (ROOT_DATA_BLOCK + 4) * TINYFS_BLOCK_SIZE, tmp_entries, sizeof(tmp_entries));
 
     /* dev directory entries */
-    tinyfs_dirent_t dev_entries[2];
+    tinyfs_dirent_t dev_entries[5];
     memset(dev_entries, 0, sizeof(dev_entries));
     dev_entries[0].inode = 5; strcpy(dev_entries[0].name, ".");
     dev_entries[1].inode = 0; strcpy(dev_entries[1].name, "..");
+    dev_entries[2].inode = 8; strcpy(dev_entries[2].name, "null");
+    dev_entries[3].inode = 9; strcpy(dev_entries[3].name, "zero");
+    dev_entries[4].inode = 10; strcpy(dev_entries[4].name, "tty");
     write_at(fd, (ROOT_DATA_BLOCK + 5) * TINYFS_BLOCK_SIZE, dev_entries, sizeof(dev_entries));
 
     /* home directory entries */

@@ -11,6 +11,8 @@
 #include "cmos.h"
 #include "scheduler.h"
 #include "pipe.h"
+#include "fs/devices.h"
+#include "fs/tinyfs.h"
 
 #define EXEC_BUF_SIZE 65536
 
@@ -24,6 +26,11 @@ static void syscall_handler(registers_t* r) {
             if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_WRITE) {
                 r->rax = pipe_write((pipe_t*)current_task->fd_data[fd],
                                     (const char*)r->rsi, (int)r->rdx);
+            } else if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_DEVICE) {
+                uint64_t dev_id = (uint64_t)current_task->fd_data[fd];
+                uint32_t major = (uint32_t)(dev_id >> 32);
+                uint32_t minor = (uint32_t)(dev_id & 0xFFFFFFFF);
+                r->rax = dev_dispatch_write(major, minor, (const char*)r->rsi, (int)r->rdx);
             } else if (fd == 1 || fd == 2) {
                 vga_write((const char*)r->rsi, r->rdx);
                 serial_write((const char*)r->rsi, r->rdx);
@@ -38,6 +45,11 @@ static void syscall_handler(registers_t* r) {
             if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_READ) {
                 r->rax = pipe_read((pipe_t*)current_task->fd_data[fd],
                                    (char*)r->rsi, (int)r->rdx);
+            } else if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_DEVICE) {
+                uint64_t dev_id = (uint64_t)current_task->fd_data[fd];
+                uint32_t major = (uint32_t)(dev_id >> 32);
+                uint32_t minor = (uint32_t)(dev_id & 0xFFFFFFFF);
+                r->rax = dev_dispatch_read(major, minor, (char*)r->rsi, (int)r->rdx);
             } else if (fd == 0) {
                 *(char*)r->rsi = keyboard_read();
                 r->rax = 1;
@@ -349,6 +361,35 @@ sbrk_done:
         case 33:
             r->rax = keyboard_data();
             break;
+        case 34: {
+            const char* path = (const char*)r->rdi;
+            int inum = fs_open(path, (int)r->rsi);
+            if (inum < 0) {
+                r->rax = -1;
+                break;
+            }
+            int fd = -1;
+            for (int i = 3; i < MAX_FDS; i++) {
+                if (current_task->fd_type[i] == 0) {
+                    fd = i;
+                    break;
+                }
+            }
+            if (fd < 0) {
+                r->rax = -1;
+                break;
+            }
+            tinyfs_inode_t inode;
+            if (tinyfs_read_inode((uint32_t)inum, &inode) < 0) {
+                r->rax = -1;
+                break;
+            }
+            uint64_t dev_id = ((uint64_t)inode.uid << 32) | inode.size;
+            current_task->fd_type[fd] = FD_DEVICE;
+            current_task->fd_data[fd] = (void*)dev_id;
+            r->rax = fd;
+            break;
+        }
         default:
             r->rax = -1;
             break;
@@ -360,6 +401,14 @@ sbrk_done:
             if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_WRITE) {
                 r->eax = pipe_write((pipe_t*)current_task->fd_data[fd],
                                     (const char*)r->ecx, (int)r->edx);
+            } else if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_DEVICE) {
+                uint32_t inum = (uint32_t)(uintptr_t)current_task->fd_data[fd];
+                tinyfs_inode_t inode;
+                if (tinyfs_read_inode(inum, &inode) < 0) {
+                    r->eax = -1;
+                } else {
+                    r->eax = dev_dispatch_write(inode.uid, inode.size, (const char*)r->ecx, (int)r->edx);
+                }
             } else if (fd == 1 || fd == 2) {
                 vga_write((const char*)r->ecx, r->edx);
                 serial_write((const char*)r->ecx, r->edx);
@@ -374,6 +423,14 @@ sbrk_done:
             if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_PIPE_READ) {
                 r->eax = pipe_read((pipe_t*)current_task->fd_data[fd],
                                    (char*)r->ecx, (int)r->edx);
+            } else if (fd >= 0 && fd < MAX_FDS && current_task->fd_type[fd] == FD_DEVICE) {
+                uint32_t inum = (uint32_t)(uintptr_t)current_task->fd_data[fd];
+                tinyfs_inode_t inode;
+                if (tinyfs_read_inode(inum, &inode) < 0) {
+                    r->eax = -1;
+                } else {
+                    r->eax = dev_dispatch_read(inode.uid, inode.size, (char*)r->ecx, (int)r->edx);
+                }
             } else if (fd == 0) {
                 *(char*)r->ecx = keyboard_read();
                 r->eax = 1;
@@ -685,6 +742,29 @@ sbrk_done:
         case 33:
             r->eax = keyboard_data();
             break;
+        case 34: {
+            const char* path = (const char*)r->ebx;
+            int inum = fs_open(path, (int)r->ecx);
+            if (inum < 0) {
+                r->eax = -1;
+                break;
+            }
+            int fd = -1;
+            for (int i = 3; i < MAX_FDS; i++) {
+                if (current_task->fd_type[i] == 0) {
+                    fd = i;
+                    break;
+                }
+            }
+            if (fd < 0) {
+                r->eax = -1;
+                break;
+            }
+            current_task->fd_type[fd] = FD_DEVICE;
+            current_task->fd_data[fd] = (void*)(uintptr_t)inum;
+            r->eax = fd;
+            break;
+        }
         default:
             r->eax = -1;
             break;

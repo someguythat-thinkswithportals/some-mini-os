@@ -16,6 +16,8 @@
 
 #define TINYFS_TYPE_FILE   0x8000
 #define TINYFS_TYPE_DIR    0x4000
+#define TINYFS_TYPE_CHARDEV 0x2000
+#define TINYFS_TYPE_BLOCKDEV 0x1000
 #define TINYFS_MODE_MASK   0x0FFF
 
 typedef struct __attribute__((packed)) tinyfs_superblock {

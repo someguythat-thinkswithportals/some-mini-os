@@ -24,6 +24,7 @@ void* sbrk(intptr_t increment);
 int pipe(int fds[2]);
 int dup2(int oldfd, int newfd);
 int close(int fd);
+int open(const char* path, int flags);
 
 // string
 int strlen(const char* s);

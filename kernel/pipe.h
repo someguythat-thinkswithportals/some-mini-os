@@ -9,6 +9,7 @@
 
 #define FD_PIPE_READ  1
 #define FD_PIPE_WRITE 2
+#define FD_DEVICE     3
 
 typedef struct pipe {
     char buf[PIPE_BUF_SIZE];

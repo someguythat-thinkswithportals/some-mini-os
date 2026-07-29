@@ -37,6 +37,7 @@
 #define SYS_SET_CURSOR 31
 #define SYS_WRITE_FILE 32
 #define SYS_KEYDATA    33
+#define SYS_OPEN       34
 
 #ifdef __x86_64__
 static inline int64_t _syscall(uint64_t num, uint64_t a0, uint64_t a1, uint64_t a2) {

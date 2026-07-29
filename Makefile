@@ -35,7 +35,7 @@ KERNEL_ARCH_OBJS := kernel/entry.o kernel/gdt.o kernel/idt.o \
 
 KERNEL_SHARED_OBJS := kernel/kernel.o kernel/vga.o kernel/keyboard.o kernel/timer.o \
             kernel/syscall.o kernel/shell.o kernel/serial.o kernel/scheduler.o \
-            kernel/cmos.o kernel/pipe.o kernel/libgcc.o kernel/fs/ata.o kernel/fs/tinyfs.o kernel/fs/vfs.o
+            kernel/cmos.o kernel/pipe.o kernel/libgcc.o kernel/fs/ata.o kernel/fs/tinyfs.o kernel/fs/vfs.o kernel/fs/devices.o
 
 KERNEL_OBJS := $(KERNEL_ARCH_OBJS) $(KERNEL_SHARED_OBJS)
 

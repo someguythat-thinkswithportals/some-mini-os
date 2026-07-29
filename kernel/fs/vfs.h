@@ -15,5 +15,6 @@ int fs_delete(const char* path);
 int fs_rename(const char* oldpath, const char* newpath);
 int fs_copy(const char* src, const char* dst);
 int fs_write_file(const char* path, const char* data, uint32_t len);
+int fs_open(const char* path, int flags);
 
 #endif
