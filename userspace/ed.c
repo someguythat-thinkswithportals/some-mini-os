@@ -4,7 +4,7 @@
 #define MAX_LINES 512
 #define MAX_LINE_LEN 256
 
-// The ed command always just makes a general protection fault error in some-tiny-os, but it will be fixed in the future
+// The ed command always just makes a general protection fault error in some-mini-os, but it will be fixed in the future
 
 static char* lines[MAX_LINES];
 static int line_count = 0;

@@ -44,7 +44,7 @@ print_string:
     ret
 
 drive: db 0
-msg_load: db "STOS", 0 ; STOS means some-tiny-os
+msg_load: db "some-mini-os", 0
 msg_err: db "ERR", 0
 
 dap_stage2:

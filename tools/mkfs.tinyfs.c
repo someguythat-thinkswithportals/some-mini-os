@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     /* inode 1: README.txt */
     inodes[1].mode = TINYFS_TYPE_FILE | TINYFS_MODE_755;
     inodes[1].uid = 0;
-    inodes[1].size = 25; /* "welcome to some-tiny-os!\n" */
+    inodes[1].size = 25; /* "welcome to some-mini-os!\n" */
     inodes[1].direct_block = ROOT_DATA_BLOCK + 1;
     inodes[1].refcount = 1;
 
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
     write_at(fd, ROOT_DATA_BLOCK * TINYFS_BLOCK_SIZE, entries, sizeof(entries));
 
     /* README.txt content */
-    const char* readme = "welcome to some-tiny-os!\n";
+    const char* readme = "welcome to some-mini-os!\n";
     write_at(fd, (ROOT_DATA_BLOCK + 1) * TINYFS_BLOCK_SIZE, readme, 25);
 
     /* hello.txt content */

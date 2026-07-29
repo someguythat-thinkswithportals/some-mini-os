@@ -766,9 +766,9 @@ strcmp:
     ret
 
 align 8
-welcome: db "Welcome to some-tiny-os!", 10
+welcome: db "Welcome to some-mini-os!", 10
 help_text: db "Available commands:", 10, "  help", 10, "  clear", 10, "  exit", 10, "  ls", 10, "  cd", 10, "  cat", 10, "  echo", 10, "  date", 10, "  mkdir", 10, "  rmdir", 10, "  rm", 10, "  cp", 10, "  mv", 10, "  reboot", 10, "  shutdown", 10, "  poweroff", 10, "  uptime", 10
-prompt: db "some-tiny-os$ "
+prompt: db "some-mini-os$ "
 crlf: db 10
 bschars: db 8, 32, 8
 msg_unknown: db "unknown command: "

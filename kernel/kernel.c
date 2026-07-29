@@ -111,11 +111,11 @@ static void go_userspace(void) {
 
 void kmain(void) {
     serial_init();
-    serial_write("some-tiny-os v0.5 booting...\n", 29);
+    serial_write("some-mini-os v0.5 booting...\n", 29);
 
     vga_init();
     vga_setcolor(VGA_LIGHT_GREY);
-    vga_writestring("some-tiny-os booting...\n");
+    vga_writestring("some-mini-os booting...\n");
 
     gdt_init();
     serial_write("GDT OK\n", 7);
@@ -160,7 +160,7 @@ void kmain(void) {
     vga_clear(VGA_BLACK);
     vga_setcolor(VGA_LIGHT_GREY);
 
-    vga_writestring("Welcome to some-tiny-os!\n");
+    vga_writestring("Welcome to some-mini-os!\n");
     vga_writestring("Starting userspace...\n\n");
 
     serial_write("Starting userspace...\n", 21);

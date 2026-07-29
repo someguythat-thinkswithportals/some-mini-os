@@ -331,7 +331,7 @@ static void tab_complete(void) {
         for (int i = 0; i < match_count; i++) {
             printf("%s  ", matches[i]);
         }
-        printf("\nsome-tiny-os$ ");
+        printf("\nsome-mini-os$ ");
         for (int i = 0; i < line_len; i++) putchar(line[i]);
         cursor = get_cursor();
         row = cursor >> 16;
@@ -902,9 +902,9 @@ static void execute(char* cmd, int allow_exec) {
         printf("touch: missing file operand\n");
     } else if (strcmp(cmd, "uname") == 0) {
 #ifdef __x86_64__
-        printf("some-tiny-os some-tiny-os 0.5.1 x86_64 some-tiny-os\n");
+        printf("some-mini-os some-mini-os 0.5.1 x86_64 some-mini-os\n");
 #else
-        printf("some-tiny-os some-tiny-os 0.5.1 i386 some-tiny-os\n");
+        printf("some-mini-os some-mini-os 0.5.1 i386 some-mini-os\n");
 #endif
     } else if (startswith(cmd, "export")) {
         cmd_export(cmd + 6);
@@ -959,11 +959,11 @@ int main(void) {
     signal(SIGINT, sigint_handler);
     history_load();
     env_load();
-    printf("Welcome to some-tiny-os!\n");
+    printf("Welcome to some-mini-os!\n");
     printf("Type 'help' for commands\n\n");
 
     while (1) {
-        printf("some-tiny-os$ ");
+        printf("some-mini-os$ ");
         shell_readline();
         if (line[0]) history_add(line);
         execute(line, 0);

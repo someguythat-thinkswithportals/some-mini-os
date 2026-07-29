@@ -377,11 +377,11 @@ static void shell_execute(void) {
 }
 
 void shell_run(void) {
-    shell_write("some-tiny-os v0.2\n");
+    shell_write("some-mini-os v0.2\n");
     shell_write("Type 'help' for commands\n\n");
 
     while (1) {
-        shell_write("some-tiny-os$ ");
+        shell_write("some-mini-os$ ");
         shell_readline();
         shell_execute();
     }

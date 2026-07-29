@@ -2,8 +2,8 @@
 *.bin
 *.elf
 *.a
-some-tiny-os-x86_64.img
-some-tiny-os-i386.img
+some-mini-os-x86_64.img
+some-mini-os-i386.img
 tools/mkfs.tinyfs
 tools/tinyfs-add
 *.swp

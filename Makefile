@@ -43,7 +43,7 @@ USER_PROGRAMS := shell cat ls echo grep shutdown touch uname ed
 
 .PHONY: all kernel clean run run-serial i386 run-i386 run-serial-i386
 
-all: some-tiny-os-$(ARCH).img
+all: some-mini-os-$(ARCH).img
 
 kernel: kernel.elf
 
@@ -53,11 +53,11 @@ i386:
 
 run-i386:
 	$(MAKE) all ARCH=i386
-	qemu-system-i386 -drive format=raw,file=some-tiny-os-i386.img -m 64M
+	qemu-system-i386 -drive format=raw,file=some-mini-os-i386.img -m 64M
 
 run-serial-i386:
 	$(MAKE) all ARCH=i386
-	qemu-system-i386 -drive format=raw,file=some-tiny-os-i386.img -m 64M -serial stdio
+	qemu-system-i386 -drive format=raw,file=some-mini-os-i386.img -m 64M -serial stdio
 
 boot/boot.bin: boot/boot.asm
 	$(NASM) -f bin -o $@ $<
@@ -116,7 +116,7 @@ kernel.elf: $(KERNEL_OBJS)
 kernel.bin: kernel.elf
 	$(OBJCOPY) -O binary $< $@
 
-some-tiny-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add $(USER_ELFS)
+some-mini-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add $(USER_ELFS)
 	dd if=/dev/zero of=$@ bs=512 count=131072 2>/dev/null
 	dd if=boot/boot.bin of=$@ bs=512 conv=notrunc 2>/dev/null
 	dd if=boot/stage2.bin of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
@@ -132,10 +132,10 @@ some-tiny-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.ti
 	./tools/tinyfs-add $@ userspace/uname.elf bin/uname
 	./tools/tinyfs-add $@ userspace/ed.elf bin/ed
 
-run: some-tiny-os-$(ARCH).img
+run: some-mini-os-$(ARCH).img
 	$(QEMU) -drive format=raw,file=$< -m 64M
 
-run-serial: some-tiny-os-$(ARCH).img
+run-serial: some-mini-os-$(ARCH).img
 	$(QEMU) -drive format=raw,file=$< -m 64M -serial stdio
 
 clean:
