@@ -10,7 +10,7 @@ Some small, open-source, Unix-like operating system
  <img src="screenshots/some-mini-os.png">
 </p>
 
-**some-mini-os** is a unix-like operating system that was made from scratch. has a custom kernel, custom libc known as ```some-libc``` and a custom filesystem. it currently supports x86_64 but in the future there might be a 32-bit version of the operating system.
+**some-mini-os** is a unix-like operating system that was made from scratch. has a custom kernel, custom libc known as ```some-libc``` and a custom filesystem. it currently supports x86_64 and i386 as of right now, but there might be more versions of some-mini-os that support other CPU architectures (like powerpc and mips) in the future.
 
 # getting started
 alright, before you can try out the operating system on a virtual machine, you need to install the following software:
