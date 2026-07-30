@@ -27,6 +27,20 @@ void serial_putchar(char c) {
     outb(COM1, c);
 }
 
+void serial_write_hex64(uint64_t v) {
+    for (int i = 60; i >= 0; i -= 4) {
+        uint8_t nib = (v >> i) & 0xF;
+        serial_putchar(nib < 10 ? '0' + nib : 'a' + nib - 10);
+    }
+}
+
+void serial_write_hex32(uint32_t v) {
+    for (int i = 28; i >= 0; i -= 4) {
+        uint8_t nib = (v >> i) & 0xF;
+        serial_putchar(nib < 10 ? '0' + nib : 'a' + nib - 10);
+    }
+}
+
 void serial_write(const char* buf, uint64_t len) {
     for (uint64_t i = 0; i < len; i++) {
         if (buf[i] == '\n') serial_putchar('\r');

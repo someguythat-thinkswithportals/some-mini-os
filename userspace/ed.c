@@ -4,8 +4,6 @@
 #define MAX_LINES 512
 #define MAX_LINE_LEN 256
 
-// The ed command always just makes a general protection fault error in some-mini-os, but it will be fixed in the future
-
 static char* lines[MAX_LINES];
 static int line_count = 0;
 static int current_line = 0;
@@ -18,7 +16,10 @@ static int read_line(char* buf, int max) {
         char c;
         int ret = read(0, &c, 1);
         if (ret <= 0) return pos;
-        if (c == '\n') break;
+        if (c == '\n') {
+            putchar('\n');
+            break;
+        }
         if (c == '\b') {
             if (pos > 0) {
                 putchar('\b');
@@ -29,6 +30,7 @@ static int read_line(char* buf, int max) {
             continue;
         }
         buf[pos++] = c;
+        putchar(c);
     }
     buf[pos] = 0;
     return pos;
@@ -102,7 +104,6 @@ static void do_insert(int after) {
 
     while (1) {
         char buf[MAX_LINE_LEN];
-        printf("? ");
         int n = read_line(buf, MAX_LINE_LEN);
         if (n <= 0) break;
         if (buf[0] == '.' && buf[1] == 0) break;
@@ -157,6 +158,21 @@ static void do_substitute(const char* pattern, const char* replacement, int from
 
 int main(void) {
     filename[0] = 0;
+
+    {
+        volatile char* args = (volatile char*)0x50F000;
+        if (args[0]) {
+            for (int i = 0; args[i] && i < 255; i++)
+                filename[i] = args[i];
+            filename[255] = 0;
+            if (load_file(filename) == 0) {
+                modified = 0;
+                printf("%d\n", line_count);
+            } else {
+                filename[0] = 0;
+            }
+        }
+    }
 
     while (1) {
         char cmd_buf[MAX_LINE_LEN + 64];

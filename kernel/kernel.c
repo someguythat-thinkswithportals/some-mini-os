@@ -113,6 +113,8 @@ void kmain(void) {
     serial_init();
     serial_write("some-mini-os v0.5 booting...\n", 29);
 
+
+
     vga_init();
     vga_setcolor(VGA_LIGHT_GREY);
     vga_writestring("some-mini-os booting...\n");

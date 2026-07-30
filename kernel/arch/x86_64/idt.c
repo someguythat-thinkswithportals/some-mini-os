@@ -66,6 +66,35 @@ static void dump_hex64(uint64_t v) {
     }
 }
 
+static void dump_pte_info(uint64_t pml4, uint64_t vaddr) {
+    int pml4_i = (vaddr >> 39) & 0x1FF;
+    int pdpt_i = (vaddr >> 30) & 0x1FF;
+    int pd_i   = (vaddr >> 21) & 0x1FF;
+    int pt_i   = (vaddr >> 12) & 0x1FF;
+    volatile uint64_t* pml4_t = (volatile uint64_t*)pml4;
+    serial_write(" pml4e=", 7);
+    if (!(pml4_t[pml4_i] & 1)) { serial_write("NP\n", 3); return; }
+    dump_hex64(pml4_t[pml4_i]);
+    volatile uint64_t* pdpt = (volatile uint64_t*)(uint64_t)(pml4_t[pml4_i] & ~0xFFFULL);
+    serial_write(" pdpte=", 7);
+    if (!(pdpt[pdpt_i] & 1)) { serial_write("NP\n", 3); return; }
+    dump_hex64(pdpt[pdpt_i]);
+    volatile uint64_t* pd = (volatile uint64_t*)(uint64_t)(pdpt[pdpt_i] & ~0xFFFULL);
+    serial_write(" pde=", 5);
+    if (!(pd[pd_i] & 1)) { serial_write("NP\n", 3); return; }
+    dump_hex64(pd[pd_i]);
+    if (pd[pd_i] & 0x80) { serial_write(" (huge)\n", 8); return; }
+    volatile uint64_t* pt = (volatile uint64_t*)(uint64_t)(pd[pd_i] & ~0xFFFULL);
+    serial_write(" pte=", 5);
+    dump_hex64(pt[pt_i]);
+    serial_write(" flags:", 7);
+    if (pt[pt_i] & 0x001) serial_write(" P", 2);
+    if (pt[pt_i] & 0x002) serial_write(" W", 2);
+    if (pt[pt_i] & 0x004) serial_write(" U", 2);
+    if (pt[pt_i] & 0x200) serial_write(" COW", 4);
+    serial_write("\n", 1);
+}
+
 static void page_fault_handler(registers_t* r) {
     uint64_t cr2;
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
@@ -73,11 +102,23 @@ static void page_fault_handler(registers_t* r) {
 
     uint64_t pml4 = current_task ? current_task->cr3 : PML4_ADDR;
 
-    if (paging_handle_cow_fault(pml4, cr2, err) == 0)
-        return;
+    serial_write("PF: cr2=", 8);
+    dump_hex64(cr2);
+    serial_write(" err=", 5);
+    dump_hex64(err);
+    serial_write(" rip=", 5);
+    dump_hex64(r->rip);
+    dump_pte_info(pml4, cr2);
 
-    if (current_task && paging_handle_demand_fault(pml4, cr2, err, current_task->vm_regions) == 0)
+    if (paging_handle_cow_fault(pml4, cr2, err) == 0) {
+        serial_write("PF: COW handled\n", 16);
         return;
+    }
+
+    if (current_task && paging_handle_demand_fault(pml4, cr2, err, current_task->vm_regions) == 0) {
+        serial_write("PF: demand handled\n", 18);
+        return;
+    }
 
     serial_write("\n!!! PAGE FAULT !!!\n", 20);
     serial_write("Fault address (CR2): 0x", 22);
@@ -92,8 +133,19 @@ static void page_fault_handler(registers_t* r) {
     serial_putchar(err & 4 ? '1' : '0');
     serial_write("\nRIP: 0x", 7);
     dump_hex64(r->rip);
+    serial_write("\nCS: 0x", 6);
+    dump_hex64(r->cs);
     serial_write("\nRSP: 0x", 7);
     dump_hex64(r->rsp);
+    serial_write("\nSS: 0x", 6);
+    dump_hex64(r->ss);
+    serial_write("\nTask pid: ", 10);
+    serial_write_hex32(current_task ? current_task->pid : 0xFFFFFFFF);
+    serial_write(" cr3=", 5);
+    serial_write_hex64(pml4);
+    serial_write("\n", 1);
+    serial_write("RFLAGS: 0x", 10);
+    dump_hex64(r->rflags);
     serial_write("\nHalting.\n", 9);
 
     vga_writestring("!!! PAGE FAULT at 0x");

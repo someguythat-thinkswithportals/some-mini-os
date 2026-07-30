@@ -136,6 +136,18 @@ static void syscall_handler(registers_t* r) {
             break;
         case 17: {
             const char* filename = (const char*)r->rdi;
+
+            char args_buf[256];
+            args_buf[0] = 0;
+            if (r->rsi) {
+                const char* src = (const char*)r->rsi;
+                for (int i = 0; i < 255; i++) {
+                    args_buf[i] = src[i];
+                    if (args_buf[i] == 0) break;
+                }
+                args_buf[255] = 0;
+            }
+
             uint64_t new_cr3 = paging_create();
             if (!new_cr3) { r->rax = -1; break; }
             uint64_t entry;
@@ -147,6 +159,16 @@ static void syscall_handler(registers_t* r) {
             uint64_t old_cr3 = current_task->cr3;
             current_task->cr3 = new_cr3;
             paging_switch(new_cr3);
+
+            if (args_buf[0]) {
+                uint64_t args_page = (uint64_t)memory_alloc_page();
+                if (args_page) {
+                    memory_set((void*)args_page, 0, 4096);
+                    for (int i = 0; args_buf[i] && i < 255; i++)
+                        ((char*)args_page)[i] = args_buf[i];
+                    paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                }
+            }
 
             if (old_cr3 != 0x1000)
                 paging_destroy(old_cr3);
@@ -517,6 +539,18 @@ sbrk_done:
             break;
         case 17: {
             const char* filename = (const char*)r->ebx;
+
+            char args_buf[256];
+            args_buf[0] = 0;
+            if (r->ecx) {
+                const char* src = (const char*)r->ecx;
+                for (int i = 0; i < 255; i++) {
+                    args_buf[i] = src[i];
+                    if (args_buf[i] == 0) break;
+                }
+                args_buf[255] = 0;
+            }
+
             uint32_t new_cr3 = paging_create();
             if (!new_cr3) { r->eax = -1; break; }
             uint32_t entry;
@@ -528,6 +562,16 @@ sbrk_done:
             uint32_t old_cr3 = current_task->cr3;
             current_task->cr3 = new_cr3;
             paging_switch(new_cr3);
+
+            if (args_buf[0]) {
+                uint32_t args_page = (uint32_t)(uintptr_t)memory_alloc_page();
+                if (args_page) {
+                    memory_set((void*)(uintptr_t)args_page, 0, 4096);
+                    for (int i = 0; args_buf[i] && i < 255; i++)
+                        ((char*)(uintptr_t)args_page)[i] = args_buf[i];
+                    paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                }
+            }
 
             if (old_cr3 != 0x1000)
                 paging_destroy(old_cr3);

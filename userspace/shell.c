@@ -914,12 +914,13 @@ static void execute(char* cmd, int allow_exec) {
         cmd_sh(cmd + 3);
     } else if (strcmp(cmd, "sh") == 0) {
         cmd_sh("");
-    } else if (startswith(cmd, "ed")) {
-        while (*cmd && *cmd != ' ') cmd++;
-        while (*cmd == ' ') cmd++;
+    } else if (cmd[0] == 'e' && cmd[1] == 'd' && (cmd[2] == ' ' || cmd[2] == '\t' || cmd[2] == 0)) {
+        char* p = cmd + 2;
+        while (*p == ' ' || *p == '\t') p++;
+        cmd = p;
         int pid = _syscall0(SYS_FORK);
         if (pid == 0) {
-            _syscall1(SYS_EXEC, (uint64_t)"/bin/ed");
+            _syscall2(SYS_EXEC, (uint64_t)"/bin/ed", (uint64_t)cmd);
             printf("ed: not found\n");
             _syscall1(SYS_EXIT, 127);
         }

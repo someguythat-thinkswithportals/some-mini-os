@@ -65,8 +65,8 @@ void scheduler_init(void) {
     main_task->name[i] = 0;
     main_task->pid = 0;
     main_task->state = TASK_RUNNING;
-    main_task->rsp = 0;
-    main_task->stack_base = 0;
+    main_task->rsp = 0x9000;
+    main_task->stack_base = 0x9000 - STACK_SIZE;
     main_task->cr3 = 0x1000;
     main_task->parent_pid = 0;
     main_task->exit_code = 0;
@@ -205,10 +205,8 @@ int sys_fork(
     if (!child->stack_base) return -1;
     memory_copy((void*)child->stack_base, (void*)parent->stack_base, STACK_SIZE);
 
-    uintptr_t offset = parent_rsp - parent->stack_base;
-    child->rsp = child->stack_base + offset;
-
     registers_t* child_r = (registers_t*)(child->stack_base + ((uintptr_t)r - (uintptr_t)parent->stack_base));
+    child->rsp = (uintptr_t)child_r;
 #ifdef __x86_64__
     child_r->rax = 0;
 #else
@@ -227,6 +225,22 @@ int sys_fork(
         child->state = TASK_ZOMBIE;
         return -1;
     }
+
+    serial_write("FORK: child pid=", 16);
+    serial_write_hex32(child->pid);
+    serial_write(" stack_base=", 12);
+    serial_write_hex64(child->stack_base);
+    serial_write(" rsp=", 5);
+    serial_write_hex64(child->rsp);
+    serial_write(" cr3=", 5);
+    serial_write_hex64(child->cr3);
+    serial_write(" rip=", 5);
+    serial_write_hex64(child_r->rip);
+    serial_write(" cs=", 4);
+    serial_write_hex64(child_r->cs);
+    serial_write(" ss=", 4);
+    serial_write_hex64(child_r->ss);
+    serial_write("\n", 1);
 
     task_t* last = task_list;
     while (last->next != task_list) last = last->next;
