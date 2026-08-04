@@ -235,7 +235,11 @@ int sys_fork(
     serial_write(" cr3=", 5);
     serial_write_hex64(child->cr3);
     serial_write(" rip=", 5);
+#ifdef __x86_64__
     serial_write_hex64(child_r->rip);
+#else
+    serial_write_hex64(child_r->eip);
+#endif
     serial_write(" cs=", 4);
     serial_write_hex64(child_r->cs);
     serial_write(" ss=", 4);

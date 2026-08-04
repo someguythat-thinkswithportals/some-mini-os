@@ -44,13 +44,13 @@ print_string:
     ret
 
 drive: db 0
-msg_load: db "some-mini-os", 0
+msg_load: db "some-bootloader", 0
 msg_err: db "ERR", 0
 
 dap_stage2:
     db 0x10
     db 0
-    dw 2
+    dw 4
     dw 0x7E00
     dw 0x0000
     dq 1

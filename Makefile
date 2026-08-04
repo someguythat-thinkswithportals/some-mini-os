@@ -120,7 +120,7 @@ some-mini-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.ti
 	dd if=/dev/zero of=$@ bs=512 count=131072 2>/dev/null
 	dd if=boot/boot.bin of=$@ bs=512 conv=notrunc 2>/dev/null
 	dd if=boot/stage2.bin of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
-	dd if=kernel.bin of=$@ bs=512 seek=3 conv=notrunc 2>/dev/null
+	dd if=kernel.bin of=$@ bs=512 seek=5 conv=notrunc 2>/dev/null
 	./tools/mkfs.tinyfs $@
 	./tools/tinyfs-add $@ userspace/shell.elf bin/shell
 	./tools/tinyfs-add $@ userspace/cat.elf bin/cat
