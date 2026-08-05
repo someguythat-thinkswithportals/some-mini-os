@@ -70,11 +70,11 @@ static void shell_cmd_help(void) {
     shell_write("  exec\n");
 }
 
-static void shell_cmd_cat(char* filename) {
+static int shell_cmd_cat(char* filename) {
     while (*filename == ' ') filename++;
     if (*filename == 0) {
         shell_write("cat: missing filename\n");
-        return;
+        return 1;
     }
     char buf[256];
     int n = fs_cat(filename, buf, sizeof(buf));
@@ -82,10 +82,11 @@ static void shell_cmd_cat(char* filename) {
         shell_write("cat: file not found: ");
         shell_write(filename);
         shell_write("\n");
-    } else {
-        buf[n] = 0;
-        shell_write(buf);
+        return 1;
     }
+    buf[n] = 0;
+    shell_write(buf);
+    return 0;
 }
 
 static void shell_cmd_echo(char* args) {
@@ -197,21 +198,31 @@ static void shell_cmd_uptime(void) {
     shell_write("s\n");
 }
 
-static void shell_execute(void) {
-    char* cmd = line;
+static int shell_execute_one(char* cmd) {
     while (*cmd == ' ') cmd++;
-    if (*cmd == 0) return;
+    int clen = 0;
+    while (cmd[clen]) clen++;
+    while (clen > 0 && (cmd[clen - 1] == ' ' || cmd[clen - 1] == '\t')) {
+        clen--;
+        cmd[clen] = 0;
+    }
+    if (*cmd == 0) return 0;
 
     if (shell_compare(cmd, "help") == 0) {
         shell_cmd_help();
+        return 0;
     } else if (shell_compare(cmd, "uptime") == 0) {
         shell_cmd_uptime();
+        return 0;
     } else if (shell_compare(cmd, "date") == 0) {
         shell_cmd_date();
+        return 0;
     } else if (shell_compare(cmd, "clear") == 0) {
         vga_clear(VGA_BLACK);
+        return 0;
     } else if (cmd[0] == 'e' && cmd[1] == 'c' && cmd[2] == 'h' && cmd[3] == 'o' && (cmd[4] == ' ' || cmd[4] == '\0')) {
         shell_cmd_echo(cmd + 4);
+        return 0;
     } else if (cmd[0] == 'l' && cmd[1] == 's' && (cmd[2] == ' ' || cmd[2] == '\0')) {
         char* arg = cmd[2] == ' ' ? cmd + 3 : NULL;
         while (arg && *arg == ' ') arg++;
@@ -219,161 +230,204 @@ static void shell_execute(void) {
         int n = fs_ls(arg, buf, sizeof(buf));
         if (n < 0) {
             shell_write("ls: no such directory\n");
-        } else {
-            buf[n] = 0;
-            shell_write(buf);
+            return 1;
         }
+        buf[n] = 0;
+        shell_write(buf);
+        return 0;
     } else if (shell_compare(cmd, "reboot") == 0) {
         shell_cmd_reboot();
+        return 0;
     } else if (cmd[0] == 'c' && cmd[1] == 'a' && cmd[2] == 't' && (cmd[3] == ' ' || cmd[3] == '\0')) {
-        shell_cmd_cat(cmd + 3);
+        return shell_cmd_cat(cmd + 3);
     } else if (cmd[0] == 's' && cmd[1] == 'h' && cmd[2] == 'u' && cmd[3] == 't'
             && cmd[4] == 'd' && cmd[5] == 'o' && cmd[6] == 'w' && cmd[7] == 'n'
             && (cmd[8] == ' ' || cmd[8] == '\0')) {
         shell_cmd_shutdown(cmd[8] == ' ' ? cmd + 9 : "");
+        return 0;
     } else if (shell_compare(cmd, "poweroff") == 0) {
         shell_cmd_shutdown(NULL);
+        return 0;
     } else if (shell_compare(cmd, "exit") == 0) {
         shell_cmd_shutdown("");
+        return 0;
     } else if (cmd[0] == 'm' && cmd[1] == 'k' && cmd[2] == 'd' && cmd[3] == 'i' && cmd[4] == 'r' && (cmd[5] == ' ' || cmd[5] == '\0')) {
         char* arg = cmd[5] == ' ' ? cmd + 6 : NULL;
         if (!arg || *arg == 0) {
             shell_write("mkdir: missing operand\n");
-        } else {
-            while (*arg == ' ') arg++;
-            if (fs_mkdir(arg) < 0)
-                shell_write("mkdir: failed\n");
+            return 1;
         }
+        while (*arg == ' ') arg++;
+        if (fs_mkdir(arg) < 0) {
+            shell_write("mkdir: failed\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'r' && cmd[1] == 'm' && cmd[2] == 'd' && cmd[3] == 'i' && cmd[4] == 'r' && (cmd[5] == ' ' || cmd[5] == '\0')) {
         char* arg = cmd[5] == ' ' ? cmd + 6 : NULL;
         if (!arg || *arg == 0) {
             shell_write("rmdir: missing operand\n");
-        } else {
-            while (*arg == ' ') arg++;
-            if (fs_rmdir(arg) < 0)
-                shell_write("rmdir: failed\n");
+            return 1;
         }
+        while (*arg == ' ') arg++;
+        if (fs_rmdir(arg) < 0) {
+            shell_write("rmdir: failed\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'r' && cmd[1] == 'm' && (cmd[2] == ' ' || cmd[2] == '\0')) {
         char* arg = cmd[2] == ' ' ? cmd + 3 : NULL;
         if (!arg || *arg == 0) {
             shell_write("rm: missing operand\n");
-        } else {
-            while (*arg == ' ') arg++;
-            if (fs_delete(arg) < 0)
-                shell_write("rm: failed\n");
+            return 1;
         }
+        while (*arg == ' ') arg++;
+        if (fs_delete(arg) < 0) {
+            shell_write("rm: failed\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'c' && cmd[1] == 'p' && cmd[2] == ' ') {
         char* args = cmd + 3;
         while (*args == ' ') args++;
         if (*args == 0) {
             shell_write("cp: missing file arguments\n");
-        } else {
-            char* src_end = args;
-            while (*src_end && *src_end != ' ') src_end++;
-            if (*src_end == 0) {
-                shell_write("cp: missing destination\n");
-            } else {
-                *src_end = 0;
-                char* dst = src_end + 1;
-                while (*dst == ' ') dst++;
-                if (fs_copy(args, dst) < 0)
-                    shell_write("cp: failed\n");
-                *src_end = ' ';
-            }
+            return 1;
         }
+        char* src_end = args;
+        while (*src_end && *src_end != ' ') src_end++;
+        if (*src_end == 0) {
+            shell_write("cp: missing destination\n");
+            return 1;
+        }
+        *src_end = 0;
+        char* dst = src_end + 1;
+        while (*dst == ' ') dst++;
+        int ret = fs_copy(args, dst);
+        *src_end = ' ';
+        if (ret < 0) {
+            shell_write("cp: failed\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'm' && cmd[1] == 'v' && cmd[2] == ' ') {
         char* args = cmd + 3;
         while (*args == ' ') args++;
         if (*args == 0) {
             shell_write("mv: missing file arguments\n");
-        } else {
-            char* src_end = args;
-            while (*src_end && *src_end != ' ') src_end++;
-            if (*src_end == 0) {
-                shell_write("mv: missing destination\n");
-            } else {
-                *src_end = 0;
-                char* dst = src_end + 1;
-                while (*dst == ' ') dst++;
-                if (fs_rename(args, dst) < 0)
-                    shell_write("mv: failed\n");
-                *src_end = ' ';
-            }
+            return 1;
         }
+        char* src_end = args;
+        while (*src_end && *src_end != ' ') src_end++;
+        if (*src_end == 0) {
+            shell_write("mv: missing destination\n");
+            return 1;
+        }
+        *src_end = 0;
+        char* dst = src_end + 1;
+        while (*dst == ' ') dst++;
+        int ret = fs_rename(args, dst);
+        *src_end = ' ';
+        if (ret < 0) {
+            shell_write("mv: failed\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'c' && cmd[1] == 'd' && (cmd[2] == ' ' || cmd[2] == '\0')) {
         char* arg = cmd[2] == ' ' ? cmd + 3 : NULL;
         if (arg) while (*arg == ' ') arg++;
         if (!arg || *arg == 0) {
             fs_cd("/");
-        } else {
-            if (fs_cd(arg) < 0) {
-                shell_write("cd: no such directory\n");
-            }
+            return 0;
         }
+        if (fs_cd(arg) < 0) {
+            shell_write("cd: no such directory\n");
+            return 1;
+        }
+        return 0;
     } else if (cmd[0] == 'e' && cmd[1] == 'x' && cmd[2] == 'e' && cmd[3] == 'c' && cmd[4] == ' ') {
         char* arg = cmd + 5;
         while (*arg == ' ') arg++;
         if (*arg == 0) {
             shell_write("exec: missing filename\n");
-        } else {
-            void* buf = memory_alloc(65536);
-            if (!buf) {
-                shell_write("exec: out of memory\n");
-            } else {
-                int n = fs_cat(arg, (char*)buf, 65536);
-                if (n <= 0) {
-                    shell_write("exec: file not found or too large\n");
-                    memory_free(buf);
-                } else {
-#ifdef __x86_64__
-                    uint64_t entry;
-                    if (elf_load(buf, &entry) < 0) {
-                        shell_write("exec: invalid ELF\n");
-                        memory_free(buf);
-                    } else {
-                        memory_free(buf);
-                        tss_set_rsp0(0x9000);
-                        __asm__ volatile(
-                            "cli\n"
-                            "movq $0x9000, %%rsp\n"
-                            "pushq $0x23\n"
-                            "pushq $0x510000\n"
-                            "pushq $0x202\n"
-                            "pushq $0x1B\n"
-                            "pushq %0\n"
-                            "iretq\n"
-                            : : "r"(entry) : "memory"
-                        );
-                    }
-#else
-                    uint32_t entry;
-                    if (elf_load(buf, &entry) < 0) {
-                        shell_write("exec: invalid ELF\n");
-                        memory_free(buf);
-                    } else {
-                        memory_free(buf);
-                        tss_set_esp0(0x9000);
-                        __asm__ volatile(
-                            "cli\n"
-                            "movl $0x9000, %%esp\n"
-                            "pushl $0x23\n"
-                            "pushl $0x510000\n"
-                            "pushl $0x202\n"
-                            "pushl $0x1B\n"
-                            "pushl %0\n"
-                            "iret\n"
-                            : : "r"(entry) : "memory"
-                        );
-                    }
-#endif
-                }
-            }
+            return 1;
         }
+        void* buf = memory_alloc(65536);
+        if (!buf) {
+            shell_write("exec: out of memory\n");
+            return 1;
+        }
+        int n = fs_cat(arg, (char*)buf, 65536);
+        if (n <= 0) {
+            shell_write("exec: file not found or too large\n");
+            memory_free(buf);
+            return 1;
+        }
+#ifdef __x86_64__
+        uint64_t entry;
+        if (elf_load(buf, &entry) < 0) {
+            shell_write("exec: invalid ELF\n");
+            memory_free(buf);
+            return 1;
+        }
+        memory_free(buf);
+        tss_set_rsp0(0x9000);
+        __asm__ volatile(
+            "cli\n"
+            "movq $0x9000, %%rsp\n"
+            "pushq $0x23\n"
+            "pushq $0x510000\n"
+            "pushq $0x202\n"
+            "pushq $0x1B\n"
+            "pushq %0\n"
+            "iretq\n"
+            : : "r"(entry) : "memory"
+        );
+#else
+        uint32_t entry;
+        if (elf_load(buf, &entry) < 0) {
+            shell_write("exec: invalid ELF\n");
+            memory_free(buf);
+            return 1;
+        }
+        memory_free(buf);
+        tss_set_esp0(0x9000);
+        __asm__ volatile(
+            "cli\n"
+            "movl $0x9000, %%esp\n"
+            "pushl $0x23\n"
+            "pushl $0x510000\n"
+            "pushl $0x202\n"
+            "pushl $0x1B\n"
+            "pushl %0\n"
+            "iret\n"
+            : : "r"(entry) : "memory"
+        );
+#endif
+        return 0;
     } else {
         shell_write("unknown command: ");
         shell_write(cmd);
         shell_write("\n");
+        return 1;
     }
+}
+
+static void shell_execute(void) {
+    char* cmd = line;
+    while (*cmd == ' ') cmd++;
+    if (*cmd == 0) return;
+
+    char* start = cmd;
+    for (int i = 0; cmd[i]; i++) {
+        if (cmd[i] == '&' && cmd[i + 1] == '&') {
+            cmd[i] = 0;
+            if (shell_execute_one(start) != 0) return;
+            start = cmd + i + 2;
+            i++;
+        }
+    }
+    shell_execute_one(start);
 }
 
 void shell_run(void) {
