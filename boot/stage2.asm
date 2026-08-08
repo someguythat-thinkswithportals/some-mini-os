@@ -354,6 +354,7 @@ fill_blue:
 ; returns dl = column after last character
 print_at:
     push ax
+    push bx
     push cx
     push dx
     push si
@@ -361,13 +362,15 @@ print_at:
     push es
     mov ax, 0xB800
     mov es, ax
+    mov bx, dx
     mov al, dh
     xor ah, ah
     mov cx, 80
     mul cx
-    xor dh, dh
-    add ax, dx
     shl ax, 1
+    and bx, 0x00FF
+    shl bx, 1
+    add ax, bx
     mov di, ax
     xor cl, cl
 .next:
@@ -385,6 +388,7 @@ print_at:
     pop dx
     add dl, cl
     pop cx
+    pop bx
     pop ax
     ret
 
@@ -401,13 +405,15 @@ print_dec:
     push ax
     mov ax, 0xB800
     mov es, ax
+    mov bx, dx
     mov al, dh
     xor ah, ah
     mov si, 80
     mul si
-    xor dh, dh
-    add ax, dx
     shl ax, 1
+    and bx, 0x00FF
+    shl bx, 1
+    add ax, bx
     mov di, ax
     pop ax
     mov bx, 10
