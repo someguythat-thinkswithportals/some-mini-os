@@ -932,7 +932,7 @@ static int execute_one(char* cmd, int allow_exec) {
         return 1;
     } else if (strcmp(cmd, "uname") == 0) {
 #ifdef __x86_64__
-        printf("some-mini-os some-mini-os 0.5.1 x86_64 some-mini-os\n");
+        printf("some-mini-os some-mini-os 0.6 x86_64 some-mini-os\n");
 #else
         printf("some-mini-os some-mini-os 0.5.1 i386 some-mini-os\n");
 #endif
