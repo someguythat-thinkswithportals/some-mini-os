@@ -933,9 +933,9 @@ static int execute_one(char* cmd, int allow_exec) {
         return 1;
     } else if (strcmp(cmd, "uname") == 0) {
 #ifdef __x86_64__ // i always forget to change the version of some-mini-os in uname every time i make an update
-        printf("some-mini-os some-mini-os 0.6 x86_64 some-mini-os\n"); 
+        printf("some-mini-os some-mini-os 0.6.1 x86_64 some-mini-os\n"); 
 #else
-        printf("some-mini-os some-mini-os 0.6 i386 some-mini-os\n");
+        printf("some-mini-os some-mini-os 0.6.1 i386 some-mini-os\n");
 #endif
     } else if (startswith(cmd, "export")) {
         cmd_export(cmd + 6);
