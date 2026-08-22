@@ -204,7 +204,7 @@ static void redraw_line(void) {
 }
 
 static const char* builtin_cmds[] = {
-    "cat", "cd", "clear", "cp", "date", "echo", "ed", "env", "exec", "export",
+    "cat", "cd", "chmod", "clear", "cp", "date", "echo", "ed", "env", "exec", "export",
     "grep", "help", "mkdir", "mv", "poweroff", "reboot", "rm", "rmdir",
     "shutdown", "sh", "touch", "uname", "unset", "uptime", 0
 };
@@ -465,6 +465,7 @@ static void cmd_help(void) {
     printf("  shutdown\n");
     printf("  poweroff\n");
     printf("  cat\n");
+    printf("  chmod\n");
     printf("  grep\n");
     printf("  uptime\n");
     printf("  date\n");
@@ -931,10 +932,10 @@ static int execute_one(char* cmd, int allow_exec) {
         printf("touch: missing file operand\n");
         return 1;
     } else if (strcmp(cmd, "uname") == 0) {
-#ifdef __x86_64__
-        printf("some-mini-os some-mini-os 0.6 x86_64 some-mini-os\n");
+#ifdef __x86_64__ // i always forget to change the version of some-mini-os in uname every time i make an update
+        printf("some-mini-os some-mini-os 0.6 x86_64 some-mini-os\n"); 
 #else
-        printf("some-mini-os some-mini-os 0.5.1 i386 some-mini-os\n");
+        printf("some-mini-os some-mini-os 0.6 i386 some-mini-os\n");
 #endif
     } else if (startswith(cmd, "export")) {
         cmd_export(cmd + 6);
@@ -944,6 +945,21 @@ static int execute_one(char* cmd, int allow_exec) {
         return cmd_sh(cmd + 3);
     } else if (strcmp(cmd, "sh") == 0) {
         return cmd_sh("");
+    } else if (cmd[0] == 'c' && cmd[1] == 'h' && cmd[2] == 'm' && cmd[3] == 'o' && cmd[4] == 'd'
+               && (cmd[5] == ' ' || cmd[5] == '\t' || cmd[5] == 0)) {
+        char* p = cmd + 5;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == 0) {
+            printf("chmod: usage: chmod MODE FILE...\n");
+            return 2;
+        }
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/bin/chmod", (uint64_t)p);
+            printf("chmod: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
     } else if (cmd[0] == 'e' && cmd[1] == 'd' && (cmd[2] == ' ' || cmd[2] == '\t' || cmd[2] == 0)) {
         char* p = cmd + 2;
         while (*p == ' ' || *p == '\t') p++;
@@ -964,6 +980,24 @@ static int execute_one(char* cmd, int allow_exec) {
         }
 
         if (has_slash) {
+            char fname[320];
+            int fi = 0;
+            while (cmd[fi] && cmd[fi] != ' ' && fi < 319) {
+                fname[fi] = cmd[fi];
+                fi++;
+            }
+            fname[fi] = 0;
+
+            int fmode = stat_mode(fname);
+            if (fmode < 0) {
+                printf("no such file: %s\n", fname);
+                return 127;
+            }
+            if ((fmode & 0111) == 0) {
+                printf("permission denied: %s\n", fname);
+                return 126;
+            }
+
             int pid = _syscall0(SYS_FORK);
             if (pid == 0) {
                 _syscall1(SYS_EXEC, (uint64_t)cmd);

@@ -16,5 +16,7 @@ int fs_rename(const char* oldpath, const char* newpath);
 int fs_copy(const char* src, const char* dst);
 int fs_write_file(const char* path, const char* data, uint32_t len);
 int fs_open(const char* path, int flags);
+int fs_chmod(const char* path, uint16_t mode);
+int fs_stat(const char* path, uint16_t* out_mode);
 
 #endif

@@ -8,3 +8,4 @@ tools/mkfs.tinyfs
 tools/tinyfs-add
 *.swp
 *~
+.build-arch

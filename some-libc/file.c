@@ -133,6 +133,14 @@ int open(const char* path, int flags) {
     return (int)_syscall2(SYS_OPEN, (uint64_t)path, (uint64_t)flags);
 }
 
+int chmod(const char* path, int mode) {
+    return (int)_syscall2(SYS_CHMOD, (uint64_t)path, (uint64_t)mode);
+}
+
+int stat_mode(const char* path) {
+    return (int)_syscall1(SYS_STAT, (uint64_t)path);
+}
+
 int fseek(FILE* f, long offset, int whence) {
     if (!f) return -1;
     switch (whence) {

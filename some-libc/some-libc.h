@@ -26,6 +26,10 @@ int dup2(int oldfd, int newfd);
 int close(int fd);
 int open(const char* path, int flags);
 
+// permissions / stat
+int chmod(const char* path, int mode);
+int stat_mode(const char* path);
+
 // string
 int strlen(const char* s);
 char* strcpy(char* dst, const char* src);

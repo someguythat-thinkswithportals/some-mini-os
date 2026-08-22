@@ -173,6 +173,8 @@ static void syscall_handler(registers_t* r) {
             if (old_cr3 != 0x1000)
                 paging_destroy(old_cr3);
 
+            signal_init_task(current_task);
+
             r->rip = entry;
             r->rsp = 0x510000;
             r->cs = 0x1B;
@@ -412,6 +414,15 @@ sbrk_done:
             r->rax = fd;
             break;
         }
+        case 35:
+            r->rax = fs_chmod((const char*)r->rdi, (uint16_t)r->rsi);
+            break;
+        case 36: {
+            uint16_t mode;
+            if (fs_stat((const char*)r->rdi, &mode) < 0) r->rax = -1;
+            else r->rax = mode;
+            break;
+        }
         default:
             r->rax = -1;
             break;
@@ -575,6 +586,8 @@ sbrk_done:
 
             if (old_cr3 != 0x1000)
                 paging_destroy(old_cr3);
+
+            signal_init_task(current_task);
 
             r->eip = entry;
             r->esp = 0x510000;
@@ -807,6 +820,15 @@ sbrk_done:
             current_task->fd_type[fd] = FD_DEVICE;
             current_task->fd_data[fd] = (void*)(uintptr_t)inum;
             r->eax = fd;
+            break;
+        }
+        case 35:
+            r->eax = fs_chmod((const char*)r->ebx, (uint16_t)r->ecx);
+            break;
+        case 36: {
+            uint16_t mode;
+            if (fs_stat((const char*)r->ebx, &mode) < 0) r->eax = -1;
+            else r->eax = mode;
             break;
         }
         default:

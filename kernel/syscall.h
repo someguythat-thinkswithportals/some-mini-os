@@ -38,6 +38,8 @@
 #define SYS_WRITE_FILE 32
 #define SYS_KEYDATA    33
 #define SYS_OPEN       34
+#define SYS_CHMOD      35
+#define SYS_STAT       36
 
 void syscall_init(void);
 

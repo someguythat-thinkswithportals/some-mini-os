@@ -625,6 +625,34 @@ int fs_cat(const char* name, char* buf, int buf_size) {
     return pos;
 }
 
+int fs_chmod(const char* path, uint16_t mode) {
+    if (!path || path[0] == 0) return -1;
+
+    uint32_t inum;
+    if (resolve_path(path, &inum) < 0) return -1;
+
+    tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    inode.mode = (inode.mode & 0xF000) | (mode & TINYFS_MODE_MASK);
+
+    if (tinyfs_write_inode(inum, &inode) < 0) return -1;
+    return 0;
+}
+
+int fs_stat(const char* path, uint16_t* out_mode) {
+    if (!path || path[0] == 0 || !out_mode) return -1;
+
+    uint32_t inum;
+    if (resolve_path(path, &inum) < 0) return -1;
+
+    tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    *out_mode = inode.mode;
+    return 0;
+}
+
 int fs_open(const char* path, int flags) {
     (void)flags;
     if (!path || path[0] == 0) return -1;

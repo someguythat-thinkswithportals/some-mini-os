@@ -38,6 +38,8 @@
 #define SYS_WRITE_FILE 32
 #define SYS_KEYDATA    33
 #define SYS_OPEN       34
+#define SYS_CHMOD      35
+#define SYS_STAT       36
 
 #ifdef __x86_64__
 static inline int64_t _syscall(uint64_t num, uint64_t a0, uint64_t a1, uint64_t a2) {

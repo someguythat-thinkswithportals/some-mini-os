@@ -39,13 +39,23 @@ KERNEL_SHARED_OBJS := kernel/kernel.o kernel/vga.o kernel/keyboard.o kernel/time
 
 KERNEL_OBJS := $(KERNEL_ARCH_OBJS) $(KERNEL_SHARED_OBJS)
 
-USER_PROGRAMS := shell cat ls echo grep shutdown touch uname ed
+USER_PROGRAMS := shell cat chmod ls echo grep shutdown touch uname ed
 
 .PHONY: all kernel clean run run-serial i386 run-i386 run-serial-i386
 
 all: some-mini-os-$(ARCH).img
 
-kernel: kernel.elf
+# guard against cross-arch contamination: switching ARCH forces a full rebuild,
+# otherwise stale e.g. i386 objects/binaries get packed into the x86_64 image
+.build-arch:
+	@printf '%s' '$(ARCH)' > $@.tmp
+	@if [ ! -f $@ ] || ! cmp -s $@ $@.tmp; then \
+		echo "ARCH switched to $(ARCH); rebuilding from scratch"; \
+		$(MAKE) --no-print-directory clean >/dev/null 2>&1 || true; \
+	fi
+	@mv -f $@.tmp $@
+
+kernel: .build-arch kernel.elf
 
 i386:
 	$(MAKE) clean
@@ -116,7 +126,7 @@ kernel.elf: $(KERNEL_OBJS)
 kernel.bin: kernel.elf
 	$(OBJCOPY) -O binary $< $@
 
-some-mini-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add $(USER_ELFS)
+some-mini-os-$(ARCH).img: .build-arch boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add $(USER_ELFS)
 	dd if=/dev/zero of=$@ bs=512 count=131072 2>/dev/null
 	dd if=boot/boot.bin of=$@ bs=512 conv=notrunc 2>/dev/null
 	dd if=boot/stage2.bin of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
@@ -124,6 +134,7 @@ some-mini-os-$(ARCH).img: boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.ti
 	./tools/mkfs.tinyfs $@
 	./tools/tinyfs-add $@ userspace/shell.elf bin/shell
 	./tools/tinyfs-add $@ userspace/cat.elf bin/cat
+	./tools/tinyfs-add $@ userspace/chmod.elf bin/chmod
 	./tools/tinyfs-add $@ userspace/ls.elf bin/ls
 	./tools/tinyfs-add $@ userspace/echo.elf bin/echo
 	./tools/tinyfs-add $@ userspace/grep.elf bin/grep
