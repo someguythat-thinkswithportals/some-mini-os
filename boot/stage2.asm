@@ -1,6 +1,13 @@
 [org 0x7E00]
 [bits 16]
 
+; kernel.bin is larger than a single BIOS extended read is guaranteed to
+; transfer, so load it in DISK_CHUNK-sector slices. These must cover the whole
+; image including its .data section (initialised globals such as heap_break).
+KERNEL_LBA equ 5            ; kernel.bin is written to LBA 5 in the Makefile
+KERNEL_SECTORS equ 160      ; 160 * 512 = 81920 bytes >= kernel.bin size
+DISK_CHUNK equ 64           ; sectors per int 0x13 call (BIOS cap is ~127)
+
 stage2_start:
     xor ax, ax
     mov ds, ax
@@ -21,11 +28,34 @@ stage2_start:
     mov al, 'R'
     out dx, al
 
+    ; Read the whole kernel image (incl. its .data section) from disk into the
+    ; 0x10000 buffer. A single BIOS extended read (int 0x13 AH=0x42) is capped
+    ; at ~127 sectors by many BIOSes, and kernel.bin is larger than 64 KiB, so
+    ; pull it in several chunks (see DISK_CHUNK below).
+    mov word [sectors_left], KERNEL_SECTORS
+    mov word [buffer_seg], 0x1000          ; buffer starts at physical 0x10000
+    mov word [dap_kernel_lba], KERNEL_LBA   ; low word; upper bits stay 0 (< 65536)
+
+.read_loop:
+    ; chunk to transfer this iteration = min(DISK_CHUNK, sectors_left)
+    mov ax, [sectors_left]
+    cmp ax, DISK_CHUNK
+    ja .full_chunk
+    mov [dap_kernel_sectors], ax
+    jmp .per_chunk
+.full_chunk:
+    mov word [dap_kernel_sectors], DISK_CHUNK
+.per_chunk:
+    ; point the DAP at the current buffer position (segment:offset 0x0000)
+    mov word [dap_buf_off], 0x0000
+    mov ax, [buffer_seg]
+    mov [dap_buf_seg], ax
+
     mov si, dap_kernel
     mov ah, 0x42
     mov dl, [drive]
     int 0x13
-    jnc kernel_loaded
+    jnc .read_ok
 
     mov dx, 0xE9
     mov al, 'F'
@@ -33,6 +63,20 @@ stage2_start:
 .hang:
     hlt
     jmp .hang
+
+.read_ok:
+    ; advance: subtract chunks read, bump LBA and buffer position by that many sectors
+    mov ax, [dap_kernel_sectors]
+    sub [sectors_left], ax
+    add word [dap_kernel_lba], ax          ; low 16 bits of LBA; kernel LBA is small
+    mov dx, ax
+    shl dx, 9                              ; dx = sectors * 512 bytes
+    mov ax, dx
+    shr ax, 4                              ; ax = bytes / 16 = segment units
+    add [buffer_seg], ax
+
+    cmp word [sectors_left], 0
+    jnz .read_loop
 
 kernel_loaded:
     call boot_menu
@@ -78,9 +122,16 @@ pm_entry:
     out dx, al
 
     cld
+    ; Copy the kernel image from the in-memory disk buffer (0x10000) to its
+    ; load address (0x100000). The size must cover the WHOLE kernel.bin,
+    ; including the .data section (which holds initialised globals such as
+    ; heap_break=0x510000). Copying only 64 KiB silently drops .data and any
+    ; kernel code beyond it, leaving those globals at 0 -> sbrk() returns 0
+    ; and the first malloc in a process faults writing to address 0.
+    ; 0x14000 = 81920 bytes = 160 sectors; must match dap_kernel sectors below.
     mov esi, 0x10000
     mov edi, 0x100000
-    mov ecx, 0x10000
+    mov ecx, 0x14000
     rep movsb
 
     mov edi, 0x1000
@@ -466,10 +517,17 @@ msg_fw_redirect2: db "hold the setup key (del/f2/f12) to enter firmware settings
 dap_kernel:
     db 0x10
     db 0
-    dw 128
+dap_kernel_sectors:
+    dw 0            ; sectors per call, set by .read_loop for each chunk
+dap_buf_off:
     dw 0x0000
+dap_buf_seg:
     dw 0x1000
-    dq 5
+dap_kernel_lba:
+    dq KERNEL_LBA
+
+sectors_left: dw 0   ; sectors of the kernel still to read (set before .read_loop)
+buffer_seg:   dw 0   ; current buffer segment; physical addr = seg*16
 
 gdt_start:
     dq 0x0000000000000000

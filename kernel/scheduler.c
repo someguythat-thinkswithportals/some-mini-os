@@ -144,7 +144,27 @@ int task_create(const char* name, void (*entry)(void)) {
 }
 
 void scheduler_yield(void) {
-    __asm__ volatile("int $32");
+#ifdef __x86_64__
+    __asm__ volatile(
+        "pushq $0x23\n"        /* fake SS */
+        "movq %%rsp, %%rax\n"
+        "addq $8, %%rax\n"
+        "pushq %%rax\n"        /* fake RSP (pre-int stack top) */
+        "int $32\n"
+        "addq $16, %%rsp\n"    /* discard the two fake words */
+        : : : "rax", "memory"
+    );
+#else
+    __asm__ volatile(
+        "pushl $0x23\n"        /* fake SS */
+        "movl %%esp, %%eax\n"
+        "addl $8, %%eax\n"
+        "pushl %%eax\n"        /* fake ESP (pre-int stack top) */
+        "int $32\n"
+        "addl $8, %%esp\n"     /* discard the two fake words */
+        : : : "eax", "memory"
+    );
+#endif
 }
 
 void scheduler_tick(void) {
@@ -260,7 +280,7 @@ void sys_exit(int code) {
     current_task->state = TASK_ZOMBIE;
     current_task->exit_code = code;
 
-    __asm__ volatile("int $32");
+    scheduler_yield();
     while (1) { __asm__ volatile("hlt"); }
 }
 
