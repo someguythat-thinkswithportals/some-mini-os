@@ -16,10 +16,8 @@ static int file_table_used = 0;
 
 static FILE* file_alloc(void) {
     for (int i = 0; i < MAX_FILES; i++) {
-        if (file_table[i].fd == 0 && !file_table[i].buf) {
-            if (i == 0) continue;
-        }
-        if (file_table[i].fd == -1) {
+        if (file_table[i].fd == -1 ||
+            (file_table[i].fd == 0 && !file_table[i].buf)) {
             file_table[i].fd = 0;
             file_table[i].buf = NULL;
             file_table[i].bufsize = 0;
