@@ -39,7 +39,7 @@ KERNEL_SHARED_OBJS := kernel/kernel.o kernel/vga.o kernel/keyboard.o kernel/time
 
 KERNEL_OBJS := $(KERNEL_ARCH_OBJS) $(KERNEL_SHARED_OBJS)
 
-USER_PROGRAMS := shell cat chmod ls echo grep shutdown touch uname ed
+USER_PROGRAMS := shell cat chmod ls echo grep shutdown touch uname ed id login whoami newid su sudo adduser deluser chpasswd
 
 .PHONY: all kernel clean run run-serial i386 run-i386 run-serial-i386
 
@@ -105,6 +105,17 @@ tools/mkfs.tinyfs: tools/mkfs.tinyfs.c
 tools/tinyfs-add: tools/tinyfs-add.c
 	$(CC) -o $@ $<
 
+tools/genpasswd: tools/genpasswd.c
+	$(CC) -o $@ $<
+
+tools/accounts/etc.passwd: tools/genpasswd
+	@mkdir -p tools/accounts
+	@printf 'root:0:0:/root:/bin/shell\n' > $@
+
+tools/accounts/etc.shadow: tools/genpasswd
+	@mkdir -p tools/accounts
+	@printf 'root:%s\n' "$$(./tools/genpasswd root)" > $@
+
 some-libc/some-libc.a: some-libc/crt0.c some-libc/string.c some-libc/stdio.c some-libc/stdlib.c some-libc/file.c
 	$(MAKE) -C some-libc ARCH=$(ARCH)
 
@@ -126,7 +137,7 @@ kernel.elf: $(KERNEL_OBJS)
 kernel.bin: kernel.elf
 	$(OBJCOPY) -O binary $< $@
 
-some-mini-os-$(ARCH).img: .build-arch boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add $(USER_ELFS)
+some-mini-os-$(ARCH).img: .build-arch boot/boot.bin boot/stage2.bin kernel.bin tools/mkfs.tinyfs tools/tinyfs-add tools/genpasswd tools/accounts/etc.passwd tools/accounts/etc.shadow $(USER_ELFS)
 	dd if=/dev/zero of=$@ bs=512 count=131072 2>/dev/null
 	dd if=boot/boot.bin of=$@ bs=512 conv=notrunc 2>/dev/null
 	dd if=boot/stage2.bin of=$@ bs=512 seek=1 conv=notrunc 2>/dev/null
@@ -134,14 +145,29 @@ some-mini-os-$(ARCH).img: .build-arch boot/boot.bin boot/stage2.bin kernel.bin t
 	./tools/mkfs.tinyfs $@
 	./tools/tinyfs-add $@ userspace/shell.elf bin/shell
 	./tools/tinyfs-add $@ userspace/cat.elf bin/cat
-	./tools/tinyfs-add $@ userspace/chmod.elf bin/chmod
 	./tools/tinyfs-add $@ userspace/ls.elf bin/ls
-	./tools/tinyfs-add $@ userspace/echo.elf bin/echo
 	./tools/tinyfs-add $@ userspace/grep.elf bin/grep
 	./tools/tinyfs-add $@ userspace/shutdown.elf bin/shutdown
 	./tools/tinyfs-add $@ userspace/touch.elf bin/touch
-	./tools/tinyfs-add $@ userspace/uname.elf bin/uname
-	./tools/tinyfs-add $@ userspace/ed.elf bin/ed
+	./tools/tinyfs-add -d $@ usr/bin
+	./tools/tinyfs-add $@ userspace/chmod.elf usr/bin/chmod
+	./tools/tinyfs-add $@ userspace/echo.elf usr/bin/echo
+	./tools/tinyfs-add $@ userspace/ed.elf usr/bin/ed
+	./tools/tinyfs-add $@ userspace/uname.elf usr/bin/uname
+	./tools/tinyfs-add $@ userspace/id.elf usr/bin/id
+	./tools/tinyfs-add $@ userspace/newid.elf usr/bin/newid
+	./tools/tinyfs-add -u 0 -g 0 -m 4111 $@ userspace/chpasswd.elf usr/bin/passwd
+	./tools/tinyfs-add -u 0 -g 0 -m 4111 $@ userspace/login.elf bin/login
+	./tools/tinyfs-add $@ userspace/whoami.elf usr/bin/whoami
+	./tools/tinyfs-add $@ userspace/su.elf usr/bin/su
+	./tools/tinyfs-add $@ userspace/sudo.elf usr/bin/sudo
+	./tools/tinyfs-add $@ userspace/adduser.elf usr/bin/adduser
+	./tools/tinyfs-add $@ userspace/deluser.elf usr/bin/deluser
+	./tools/tinyfs-add $@ tools/accounts/env.seed env
+	./tools/tinyfs-add -d $@ etc /etc
+	./tools/tinyfs-add -u 0 -g 0 -m 0644 $@ tools/accounts/etc.passwd /etc/passwd
+	./tools/tinyfs-add -u 0 -g 0 -m 0600 $@ tools/accounts/etc.shadow /etc/shadow
+	./tools/tinyfs-add -d -u 0 -g 0 -m 0700 $@ root /root
 
 run: some-mini-os-$(ARCH).img
 	$(QEMU) -drive format=raw,file=$< -m 64M
@@ -155,5 +181,5 @@ clean:
 	rm -f kernel/*.o kernel/*.bin kernel/*.elf
 	rm -f kernel/fs/*.o
 	rm -f userspace/*.bin userspace/*.o userspace/*.elf
-	rm -f tools/mkfs.tinyfs tools/tinyfs-add
+	rm -f tools/mkfs.tinyfs tools/tinyfs-add tools/genpasswd tools/accounts/etc.passwd tools/accounts/etc.shadow
 	$(MAKE) -C some-libc clean

@@ -68,6 +68,8 @@ typedef struct task {
     uint32_t trampoline_addr;
 #endif
     int in_signal;
+    uint16_t ruid, rgid;
+    uint16_t euid, egid;
 } task_t;
 
 void scheduler_init(void);

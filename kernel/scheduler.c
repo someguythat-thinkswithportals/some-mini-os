@@ -77,6 +77,10 @@ void scheduler_init(void) {
         main_task->fd_data[i] = 0;
     }
     signal_init_task(main_task);
+    main_task->ruid = 0;
+    main_task->rgid = 0;
+    main_task->euid = 0;
+    main_task->egid = 0;
     current_task = main_task;
     task_list = main_task;
     main_task->next = main_task;
@@ -105,6 +109,10 @@ int task_create(const char* name, void (*entry)(void)) {
         task->fd_data[i] = 0;
     }
     signal_init_task(task);
+    task->ruid = 0;
+    task->rgid = 0;
+    task->euid = 0;
+    task->egid = 0;
 
     task->stack_base = (uintptr_t)memory_alloc(STACK_SIZE);
     if (!task->stack_base) return -1;
@@ -220,6 +228,10 @@ int sys_fork(
     child->signal_mask = parent->signal_mask;
     child->trampoline_addr = parent->trampoline_addr;
     child->in_signal = 0;
+    child->ruid = parent->ruid;
+    child->rgid = parent->rgid;
+    child->euid = parent->euid;
+    child->egid = parent->egid;
 
     child->stack_base = (uintptr_t)memory_alloc(STACK_SIZE);
     if (!child->stack_base) return -1;

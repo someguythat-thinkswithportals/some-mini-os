@@ -17,6 +17,12 @@ int strcmp(const char* a, const char* b) {
     return (unsigned char)*a - (unsigned char)*b;
 }
 
+int strncmp(const char* a, const char* b, int n) {
+    while (n-- > 0 && *a && *a == *b) { a++; b++; }
+    if (n < 0) return 0;
+    return (unsigned char)*a - (unsigned char)*b;
+}
+
 char* strncpy(char* dst, const char* src, int n) {
     char* d = dst;
     while (n-- > 0 && (*d++ = *src++));

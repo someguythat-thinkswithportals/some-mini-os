@@ -40,6 +40,14 @@
 #define SYS_OPEN       34
 #define SYS_CHMOD      35
 #define SYS_STAT       36
+#define SYS_GETUID     37
+#define SYS_GETGID     38
+#define SYS_GETEUID    39
+#define SYS_GETEGID    40
+#define SYS_SETUID     41
+#define SYS_SETGID     42
+#define SYS_STAT2      43
+#define SYS_SUDO       44
 
 #ifdef __x86_64__
 static inline int64_t _syscall(uint64_t num, uint64_t a0, uint64_t a1, uint64_t a2) {

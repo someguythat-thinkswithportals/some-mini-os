@@ -139,6 +139,41 @@ int stat_mode(const char* path) {
     return (int)_syscall1(SYS_STAT, (uint64_t)path);
 }
 
+int getuid(void) {
+    return (int)_syscall0(SYS_GETUID);
+}
+
+int getgid(void) {
+    return (int)_syscall0(SYS_GETGID);
+}
+
+int geteuid(void) {
+    return (int)_syscall0(SYS_GETEUID);
+}
+
+int getegid(void) {
+    return (int)_syscall0(SYS_GETEGID);
+}
+
+int setuid(int uid) {
+    return (int)_syscall1(SYS_SETUID, (uint64_t)uid);
+}
+
+int setgid(int gid) {
+    return (int)_syscall1(SYS_SETGID, (uint64_t)gid);
+}
+
+int stat2(const char* path, uint16_t* mode, uint16_t* uid, uint16_t* gid, uint32_t* size) {
+    uint32_t buf[4];
+    int ret = (int)_syscall2(SYS_STAT2, (uint64_t)path, (uint64_t)buf);
+    if (ret < 0) return ret;
+    if (mode) *mode = (uint16_t)buf[0];
+    if (uid)  *uid  = (uint16_t)buf[1];
+    if (gid)  *gid  = (uint16_t)buf[2];
+    if (size) *size = buf[3];
+    return 0;
+}
+
 int fseek(FILE* f, long offset, int whence) {
     if (!f) return -1;
     switch (whence) {

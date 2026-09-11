@@ -3,6 +3,7 @@
 #include "devices.h"
 #include "../memory.h"
 #include "../serial.h"
+#include "../scheduler.h"
 
 static uint32_t cwd_inum;
 
@@ -31,6 +32,18 @@ static int is_file(tinyfs_inode_t* inode) {
 
 static int is_chardev(tinyfs_inode_t* inode) {
     return (inode->mode & 0xF000) == TINYFS_TYPE_CHARDEV;
+}
+
+static int access(tinyfs_inode_t* inode, uint16_t want_bits) {
+    if (current_task->euid == 0) return 1;
+    if (current_task->euid == inode->uid) {
+        if ((inode->mode & (want_bits << 6)) == (want_bits << 6)) return 1;
+    }
+    if (current_task->egid == inode->gid) {
+        if ((inode->mode & (want_bits << 3)) == (want_bits << 3)) return 1;
+    }
+    if ((inode->mode & want_bits) == want_bits) return 1;
+    return 0;
 }
 
 static int find_dirent(uint32_t dir_inum, const char* name, uint32_t* out_inum) {
@@ -120,6 +133,7 @@ int fs_ls(const char* path, char* buf, int buf_size) {
     tinyfs_inode_t inode;
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
     if (!is_dir(&inode)) return -1;
+    if (!access(&inode, 4)) return -1;
 
     uint8_t* block = (uint8_t*)memory_alloc(TINYFS_BLOCK_SIZE);
     if (!block) return -1;
@@ -213,6 +227,7 @@ int fs_mkdir(const char* path) {
     tinyfs_inode_t pinode;
     if (tinyfs_read_inode(parent_inum, &pinode) < 0) return -1;
     if (!is_dir(&pinode)) return -1;
+    if (!access(&pinode, 2)) return -1;
 
     uint32_t existing;
     if (find_dirent(parent_inum, component, &existing) == 0) return -1;
@@ -223,7 +238,8 @@ int fs_mkdir(const char* path) {
     tinyfs_inode_t inode;
     memory_set(&inode, 0, sizeof(inode));
     inode.mode = TINYFS_TYPE_DIR | 0x01ED;
-    inode.uid = 0;
+    inode.uid = current_task->euid;
+    inode.gid = current_task->egid;
     inode.atime = 0;
     inode.mtime = 0;
     inode.ctime = 0;
@@ -310,6 +326,10 @@ int fs_rmdir(const char* path) {
         if (resolve_path(parent_path, &parent_inum) < 0) return -1;
     }
 
+    tinyfs_inode_t parent_inode;
+    if (tinyfs_read_inode(parent_inum, &parent_inode) < 0) return -1;
+    if (!access(&parent_inode, 2)) return -1;
+
     if (tinyfs_remove_dirent(parent_inum, component) < 0) return -1;
 
     if (inode.direct_block != 0) {
@@ -337,6 +357,7 @@ int fs_create(const char* path) {
     tinyfs_inode_t pinode;
     if (tinyfs_read_inode(parent_inum, &pinode) < 0) return -1;
     if (!is_dir(&pinode)) return -1;
+    if (!access(&pinode, 2)) return -1;
 
     uint32_t existing;
     if (find_dirent(parent_inum, component, &existing) == 0) return -1;
@@ -347,7 +368,8 @@ int fs_create(const char* path) {
     tinyfs_inode_t inode;
     memory_set(&inode, 0, sizeof(inode));
     inode.mode = TINYFS_TYPE_FILE | 0x01ED;
-    inode.uid = 0;
+    inode.uid = current_task->euid;
+    inode.gid = current_task->egid;
     inode.size = 0;
     inode.atime = 0;
     inode.mtime = 0;
@@ -391,6 +413,10 @@ int fs_delete(const char* path) {
         if (resolve_path(parent_path, &parent_inum) < 0) return -1;
     }
 
+    tinyfs_inode_t parent_inode;
+    if (tinyfs_read_inode(parent_inum, &parent_inode) < 0) return -1;
+    if (!access(&parent_inode, 2)) return -1;
+
     if (tinyfs_remove_dirent(parent_inum, component) < 0) return -1;
 
     if (inode.direct_block != 0) {
@@ -422,6 +448,10 @@ int fs_rename(const char* oldpath, const char* newpath) {
         if (resolve_path(old_parent_path, &old_parent_inum) < 0) return -1;
     }
 
+    tinyfs_inode_t old_parent_inode;
+    if (tinyfs_read_inode(old_parent_inum, &old_parent_inode) < 0) return -1;
+    if (!access(&old_parent_inode, 2)) return -1;
+
     char new_parent_path[256];
     char new_component[29];
     split_path(newpath, new_parent_path, sizeof(new_parent_path),
@@ -434,6 +464,10 @@ int fs_rename(const char* oldpath, const char* newpath) {
     } else {
         if (resolve_path(new_parent_path, &new_parent_inum) < 0) return -1;
     }
+
+    tinyfs_inode_t new_parent_inode;
+    if (tinyfs_read_inode(new_parent_inum, &new_parent_inode) < 0) return -1;
+    if (!access(&new_parent_inode, 2)) return -1;
 
     uint32_t existing;
     if (find_dirent(new_parent_inum, new_component, &existing) == 0) return -1;
@@ -453,6 +487,7 @@ int fs_copy(const char* src, const char* dst) {
     tinyfs_inode_t src_inode;
     if (tinyfs_read_inode(src_inum, &src_inode) < 0) return -1;
     if (!is_file(&src_inode)) return -1;
+    if (!access(&src_inode, 4)) return -1;
 
     if (fs_create(dst) < 0) return -1;
 
@@ -504,8 +539,10 @@ int fs_write_file(const char* path, const char* data, uint32_t len) {
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
 
     if (is_chardev(&inode)) {
-        return dev_dispatch_write(inode.uid, inode.size, data, len);
+        return dev_dispatch_write(inode.dev_major, inode.dev_minor, data, len);
     }
+
+    if (!access(&inode, 2)) return -1;
 
     fs_delete(path);
 
@@ -568,10 +605,11 @@ int fs_cat(const char* name, char* buf, int buf_size) {
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
 
     if (is_chardev(&inode)) {
-        return dev_dispatch_read(inode.uid, inode.size, buf, buf_size);
+        return dev_dispatch_read(inode.dev_major, inode.dev_minor, buf, buf_size);
     }
 
     if (!is_file(&inode)) return -1;
+    if (!access(&inode, 4)) return -1;
 
     if (inode.size == 0) return 0;
 
@@ -634,6 +672,8 @@ int fs_chmod(const char* path, uint16_t mode) {
     tinyfs_inode_t inode;
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
 
+    if (current_task->euid != 0 && current_task->euid != inode.uid) return -1;
+
     inode.mode = (inode.mode & 0xF000) | (mode & TINYFS_MODE_MASK);
 
     if (tinyfs_write_inode(inum, &inode) < 0) return -1;
@@ -653,6 +693,23 @@ int fs_stat(const char* path, uint16_t* out_mode) {
     return 0;
 }
 
+int fs_stat2(const char* path, uint16_t* out_mode, uint16_t* out_uid,
+             uint16_t* out_gid, uint32_t* out_size) {
+    if (!path || path[0] == 0 || !out_mode) return -1;
+
+    uint32_t inum;
+    if (resolve_path(path, &inum) < 0) return -1;
+
+    tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    *out_mode = inode.mode;
+    if (out_uid) *out_uid = inode.uid;
+    if (out_gid) *out_gid = inode.gid;
+    if (out_size) *out_size = inode.size;
+    return 0;
+}
+
 int fs_open(const char* path, int flags) {
     (void)flags;
     if (!path || path[0] == 0) return -1;
@@ -664,6 +721,19 @@ int fs_open(const char* path, int flags) {
     if (tinyfs_read_inode(inum, &inode) < 0) return -1;
 
     if (!is_chardev(&inode)) return -1;
+    if (!access(&inode, 4)) return -1;
 
     return (int)inum;
+}
+
+int fs_access(const char* path, uint16_t want_bits) {
+    if (!path || path[0] == 0) return -1;
+
+    uint32_t inum;
+    if (resolve_path(path, &inum) < 0) return -1;
+
+    tinyfs_inode_t inode;
+    if (tinyfs_read_inode(inum, &inode) < 0) return -1;
+
+    return access(&inode, want_bits) ? 0 : -1;
 }

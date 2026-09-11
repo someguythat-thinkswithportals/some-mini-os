@@ -9,7 +9,7 @@ else
   CFLAGS := -ffreestanding -m64 -mno-red-zone -fno-builtin -fno-stack-protector -Wall -Wextra -I.
 endif
 
-OBJS := crt0.o string.o stdio.o stdlib.o file.o signal.o
+OBJS := crt0.o string.o stdio.o stdlib.o file.o signal.o passwd.o
 ifeq ($(ARCH),i386)
   OBJS += libgcc.o
 endif

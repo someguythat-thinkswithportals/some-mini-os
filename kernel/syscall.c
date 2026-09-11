@@ -16,7 +16,63 @@
 
 #define EXEC_BUF_SIZE 65536
 
+static int kstrcmp(const char* a, const char* b) {
+    while (*a && *a == *b) { a++; b++; }
+    return (unsigned char)*a - (unsigned char)*b;
+}
 
+static uint64_t kfnv1a(const char* data) {
+    uint64_t hash = 14695981039346656037ULL;
+    for (int i = 0; data[i]; i++) {
+        hash ^= (uint64_t)(unsigned char)data[i];
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+static int sudo_auth(const char* user, const char* pass) {
+    char buf[4608];
+    int n = fs_cat("/etc/shadow", buf, 4095);
+    if (n <= 0) return -1;
+    buf[n] = 0;
+
+    int start = 0;
+    for (int i = 0; i <= n; i++) {
+        if (buf[i] == '\n' || buf[i] == 0) {
+            buf[i] = 0;
+            char* line = buf + start;
+            start = i + 1;
+            if (line[0] == 0) continue;
+
+            char* p1 = 0;
+            for (char* q = line; *q; q++) if (*q == ':') { p1 = q; break; }
+            if (!p1) continue;
+            *p1 = 0;
+            char* salt = p1 + 1;
+
+            char* p2 = 0;
+            for (char* q = salt; *q; q++) if (*q == ':') { p2 = q; break; }
+            if (!p2) continue;
+            *p2 = 0;
+            char* hash = p2 + 1;
+
+            if (kstrcmp(line, user) != 0) continue;
+
+            uint64_t h = kfnv1a(salt);
+            for (int k = 0; pass[k]; k++) {
+                h ^= (uint64_t)(unsigned char)pass[k];
+                h *= 1099511628211ULL;
+            }
+            const char* hex = "0123456789abcdef";
+            char expected[17];
+            for (int b = 15; b >= 0; b--)
+                expected[15 - b] = hex[(h >> (b * 4)) & 0xF];
+            expected[16] = 0;
+            return kstrcmp(hash, expected) == 0 ? 0 : -1;
+        }
+    }
+    return -1;
+}
 
 static void syscall_handler(registers_t* r) {
 #ifdef __x86_64__
@@ -166,6 +222,12 @@ static void syscall_handler(registers_t* r) {
                     memory_set((void*)args_page, 0, 4096);
                     for (int i = 0; args_buf[i] && i < 255; i++)
                         ((char*)args_page)[i] = args_buf[i];
+                    paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                }
+            } else {
+                uint64_t args_page = (uint64_t)memory_alloc_page();
+                if (args_page) {
+                    memory_set((void*)args_page, 0, 4096);
                     paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
                 }
             }
@@ -408,7 +470,7 @@ sbrk_done:
                 r->rax = -1;
                 break;
             }
-            uint64_t dev_id = ((uint64_t)inode.uid << 32) | inode.size;
+            uint64_t dev_id = ((uint64_t)inode.dev_major << 32) | inode.dev_minor;
             current_task->fd_type[fd] = FD_DEVICE;
             current_task->fd_data[fd] = (void*)dev_id;
             r->rax = fd;
@@ -421,6 +483,88 @@ sbrk_done:
             uint16_t mode;
             if (fs_stat((const char*)r->rdi, &mode) < 0) r->rax = -1;
             else r->rax = mode;
+            break;
+        }
+        case 37:
+            r->rax = current_task->ruid;
+            break;
+        case 38:
+            r->rax = current_task->rgid;
+            break;
+        case 39:
+            r->rax = current_task->euid;
+            break;
+        case 40:
+            r->rax = current_task->egid;
+            break;
+        case 41: {
+            uint16_t uid = (uint16_t)r->rdi;
+            if (current_task->euid == 0) {
+                current_task->ruid = uid;
+                current_task->euid = uid;
+            } else if (uid == current_task->ruid) {
+                current_task->euid = uid;
+            } else {
+                r->rax = -1;
+                break;
+            }
+            r->rax = 0;
+            break;
+        }
+        case 42: {
+            uint16_t gid = (uint16_t)r->rdi;
+            if (current_task->euid == 0) {
+                current_task->rgid = gid;
+                current_task->egid = gid;
+            } else if (gid == current_task->rgid) {
+                current_task->egid = gid;
+            } else {
+                r->rax = -1;
+                break;
+            }
+            r->rax = 0;
+            break;
+        }
+        case 43: {
+            uint16_t mode, uid, gid;
+            uint32_t size;
+            if (fs_stat2((const char*)r->rdi, &mode, &uid, &gid, &size) < 0) {
+                r->rax = -1;
+                break;
+            }
+            uint32_t* buf = (uint32_t*)r->rsi;
+            buf[0] = (uint32_t)mode;
+            buf[1] = (uint32_t)uid;
+            buf[2] = (uint32_t)gid;
+            buf[3] = size;
+            r->rax = 0;
+            break;
+        }
+        case 44: {
+            char user[64];
+            char pass[64];
+            const char* src = (const char*)r->rdi;
+            for (int i = 0; i < 63; i++) {
+                user[i] = src[i];
+                if (user[i] == 0) break;
+            }
+            user[63] = 0;
+            src = (const char*)r->rsi;
+            for (int i = 0; i < 63; i++) {
+                pass[i] = src[i];
+                if (pass[i] == 0) break;
+            }
+            pass[63] = 0;
+
+            if (sudo_auth(user, pass) < 0) {
+                r->rax = -1;
+                break;
+            }
+            current_task->ruid = 0;
+            current_task->euid = 0;
+            current_task->rgid = 0;
+            current_task->egid = 0;
+            r->rax = 0;
             break;
         }
         default:
@@ -440,7 +584,7 @@ sbrk_done:
                 if (tinyfs_read_inode(inum, &inode) < 0) {
                     r->eax = -1;
                 } else {
-                    r->eax = dev_dispatch_write(inode.uid, inode.size, (const char*)r->ecx, (int)r->edx);
+                    r->eax = dev_dispatch_write(inode.dev_major, inode.dev_minor, (const char*)r->ecx, (int)r->edx);
                 }
             } else if (fd == 1 || fd == 2) {
                 vga_write((const char*)r->ecx, r->edx);
@@ -462,7 +606,7 @@ sbrk_done:
                 if (tinyfs_read_inode(inum, &inode) < 0) {
                     r->eax = -1;
                 } else {
-                    r->eax = dev_dispatch_read(inode.uid, inode.size, (char*)r->ecx, (int)r->edx);
+                    r->eax = dev_dispatch_read(inode.dev_major, inode.dev_minor, (char*)r->ecx, (int)r->edx);
                 }
             } else if (fd == 0) {
                 *(char*)r->ecx = keyboard_read();
@@ -580,6 +724,12 @@ sbrk_done:
                     memory_set((void*)(uintptr_t)args_page, 0, 4096);
                     for (int i = 0; args_buf[i] && i < 255; i++)
                         ((char*)(uintptr_t)args_page)[i] = args_buf[i];
+                    paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+                }
+            } else {
+                uint32_t args_page = (uint32_t)(uintptr_t)memory_alloc_page();
+                if (args_page) {
+                    memory_set((void*)(uintptr_t)args_page, 0, 4096);
                     paging_map_4kb(new_cr3, 0x50F000, args_page, PAGE_PRESENT | PAGE_RW | PAGE_USER);
                 }
             }
@@ -829,6 +979,88 @@ sbrk_done:
             uint16_t mode;
             if (fs_stat((const char*)r->ebx, &mode) < 0) r->eax = -1;
             else r->eax = mode;
+            break;
+        }
+        case 37:
+            r->eax = current_task->ruid;
+            break;
+        case 38:
+            r->eax = current_task->rgid;
+            break;
+        case 39:
+            r->eax = current_task->euid;
+            break;
+        case 40:
+            r->eax = current_task->egid;
+            break;
+        case 41: {
+            uint16_t uid = (uint16_t)r->ebx;
+            if (current_task->euid == 0) {
+                current_task->ruid = uid;
+                current_task->euid = uid;
+            } else if (uid == current_task->ruid) {
+                current_task->euid = uid;
+            } else {
+                r->eax = -1;
+                break;
+            }
+            r->eax = 0;
+            break;
+        }
+        case 42: {
+            uint16_t gid = (uint16_t)r->ebx;
+            if (current_task->euid == 0) {
+                current_task->rgid = gid;
+                current_task->egid = gid;
+            } else if (gid == current_task->rgid) {
+                current_task->egid = gid;
+            } else {
+                r->eax = -1;
+                break;
+            }
+            r->eax = 0;
+            break;
+        }
+        case 43: {
+            uint16_t mode, uid, gid;
+            uint32_t size;
+            if (fs_stat2((const char*)r->ebx, &mode, &uid, &gid, &size) < 0) {
+                r->eax = -1;
+                break;
+            }
+            uint32_t* buf = (uint32_t*)r->ecx;
+            buf[0] = (uint32_t)mode;
+            buf[1] = (uint32_t)uid;
+            buf[2] = (uint32_t)gid;
+            buf[3] = size;
+            r->eax = 0;
+            break;
+        }
+        case 44: {
+            char user[64];
+            char pass[64];
+            const char* src = (const char*)(uintptr_t)r->ebx;
+            for (int i = 0; i < 63; i++) {
+                user[i] = src[i];
+                if (user[i] == 0) break;
+            }
+            user[63] = 0;
+            src = (const char*)(uintptr_t)r->ecx;
+            for (int i = 0; i < 63; i++) {
+                pass[i] = src[i];
+                if (pass[i] == 0) break;
+            }
+            pass[63] = 0;
+
+            if (sudo_auth(user, pass) < 0) {
+                r->eax = -1;
+                break;
+            }
+            current_task->ruid = 0;
+            current_task->euid = 0;
+            current_task->rgid = 0;
+            current_task->egid = 0;
+            r->eax = 0;
             break;
         }
         default:

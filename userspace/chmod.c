@@ -86,10 +86,21 @@ int main(void) {
 
     char* p = line;
     while (*p == ' ' || *p == '\t') p++;
-    char* mode_spec = p;
+    char* first = p;
     while (*p && *p != ' ' && *p != '\t') p++;
     if (*p) { *p = 0; p++; }
     while (*p == ' ' || *p == '\t') p++;
+
+    if (strcmp(first, "--help") == 0) {
+        printf("Usage: chmod MODE FILE...\n");
+        printf("Change the permissions of each FILE to MODE.\n\n");
+        printf("MODE can be an octal value (e.g. 755) or symbolic (e.g. u+x, a=rw).\n");
+        printf("Symbolic mode uses who (u, g, o, a) followed by an operator\n");
+        printf("(+, -, =) followed by permissions (r, w, x).\n");
+        return 0;
+    }
+
+    char* mode_spec = first;
 
     if (mode_spec[0] == 0 || *p == 0) {
         printf("chmod: usage: chmod MODE FILE...\n");

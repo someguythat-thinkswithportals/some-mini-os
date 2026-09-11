@@ -29,11 +29,19 @@ int open(const char* path, int flags);
 // permissions / stat
 int chmod(const char* path, int mode);
 int stat_mode(const char* path);
+int stat2(const char* path, uint16_t* mode, uint16_t* uid, uint16_t* gid, uint32_t* size);
+int getuid(void);
+int getgid(void);
+int geteuid(void);
+int getegid(void);
+int setuid(int uid);
+int setgid(int gid);
 
 // string
 int strlen(const char* s);
 char* strcpy(char* dst, const char* src);
 int strcmp(const char* a, const char* b);
+int strncmp(const char* a, const char* b, int n);
 char* strncpy(char* dst, const char* src, int n);
 char* strcat(char* dst, const char* src);
 char* strchr(const char* s, int c);
@@ -41,6 +49,38 @@ char* strstr(const char* haystack, const char* needle);
 void* memset(void* dst, int c, int n);
 void* memcpy(void* dst, const void* src, int n);
 void* memmove(void* dst, const void* src, int n);
+
+// passwd / auth
+typedef struct {
+    char name[32];
+    int uid;
+    int gid;
+    char home[128];
+    char shell[128];
+} passwd_entry_t;
+
+typedef struct {
+    char name[32];
+    char salt[16];
+    char hash[32];
+} shadow_entry_t;
+
+uint64_t fnv1a64(const char* data);
+void hash_password(const char* salt, const char* pass, char* out_salt_hash);
+void hash_only(const char* salt, const char* pass, char* out_hash);
+int verify_password(const char* salt, const char* stored_hash, const char* pass);
+passwd_entry_t* getpwnam(const char* name);
+passwd_entry_t* getpwuid(int uid);
+int add_passwd_entry(const passwd_entry_t* e);
+int remove_passwd_entry(const char* name);
+shadow_entry_t* getspnam(const char* name);
+int add_shadow_entry(const char* name, const char* salt, const char* hash);
+int remove_shadow_entry(const char* name);
+void generate_salt(char* out);
+int read_password(const char* prompt, char* buf, int max);
+int find_next_uid(void);
+void int_to_str(int val, char* out);
+int str_to_int(const char* s);
 
 // file I/O
 #define EOF (-1)

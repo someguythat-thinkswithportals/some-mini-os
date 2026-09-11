@@ -204,9 +204,10 @@ static void redraw_line(void) {
 }
 
 static const char* builtin_cmds[] = {
-    "cat", "cd", "chmod", "clear", "cp", "date", "echo", "ed", "env", "exec", "export",
-    "grep", "help", "mkdir", "mv", "poweroff", "reboot", "rm", "rmdir",
-    "shutdown", "sh", "touch", "uname", "unset", "uptime", 0
+    "adduser", "cat", "cd", "chmod", "clear", "cp", "date", "deluser", "echo", "ed",
+    "env", "exec", "export", "grep", "help", "id", "login", "mkdir", "mv", "newid",
+    "passwd", "poweroff", "reboot", "rm", "rmdir", "shutdown", "sh", "su",
+    "sudo", "touch", "uname", "unset", "uptime", "useradd", "userdel", "whoami", 0
 };
 
 static void tab_complete(void) {
@@ -331,7 +332,14 @@ static void tab_complete(void) {
         for (int i = 0; i < match_count; i++) {
             printf("%s  ", matches[i]);
         }
-        printf("\nsome-mini-os$ ");
+        {
+            const char* u = env_get("USER");
+            char ps = getuid() == 0 ? '#' : '$';
+            if (u && u[0])
+                printf("\n%c%s@some-mini-os%c ", ps, u, ps);
+            else
+                printf("\nsome-mini-os%c ", ps);
+        }
         for (int i = 0; i < line_len; i++) putchar(line[i]);
         cursor = get_cursor();
         row = cursor >> 16;
@@ -483,6 +491,14 @@ static void cmd_help(void) {
     printf("  export [KEY=VALUE]\n");
     printf("  unset KEY\n");
     printf("  env\n");
+    printf("  login         boot-time authentication\n");
+    printf("  whoami        print current username\n");
+    printf("  id            print uid/gid with names\n");
+    printf("  su [USER]     switch user (root only)\n");
+    printf("  sudo CMD      run command as root\n");
+    printf("  adduser NAME  add user account (root only)\n");
+    printf("  deluser NAME  remove user account (root only)\n");
+    printf("  passwd        change password\n");
 }
 
 static int cmd_cat(char* arg) {
@@ -931,12 +947,17 @@ static int execute_one(char* cmd, int allow_exec) {
     } else if (strcmp(cmd, "touch") == 0) {
         printf("touch: missing file operand\n");
         return 1;
-    } else if (strcmp(cmd, "uname") == 0) {
-#ifdef __x86_64__ // i always forget to change the version of some-mini-os in uname every time i make an update
-        printf("some-mini-os some-mini-os 0.6.1 x86_64 some-mini-os\n"); 
-#else
-        printf("some-mini-os some-mini-os 0.6.1 i386 some-mini-os\n");
-#endif
+    } else if (cmd[0] == 'u' && cmd[1] == 'n' && cmd[2] == 'a' && cmd[3] == 'm' && cmd[4] == 'e'
+               && (cmd[5] == ' ' || cmd[5] == '\t' || cmd[5] == 0)) {
+        char* p = cmd + 5;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/uname", (uint64_t)(*p ? p : " "));
+            printf("uname: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
     } else if (startswith(cmd, "export")) {
         cmd_export(cmd + 6);
     } else if (startswith(cmd, "unset ")) {
@@ -955,7 +976,7 @@ static int execute_one(char* cmd, int allow_exec) {
         }
         int pid = _syscall0(SYS_FORK);
         if (pid == 0) {
-            _syscall2(SYS_EXEC, (uint64_t)"/bin/chmod", (uint64_t)p);
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/chmod", (uint64_t)p);
             printf("chmod: not found\n");
             _syscall1(SYS_EXIT, 127);
         }
@@ -966,8 +987,96 @@ static int execute_one(char* cmd, int allow_exec) {
         cmd = p;
         int pid = _syscall0(SYS_FORK);
         if (pid == 0) {
-            _syscall2(SYS_EXEC, (uint64_t)"/bin/ed", (uint64_t)cmd);
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/ed", (uint64_t)cmd);
             printf("ed: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (strcmp(cmd, "whoami") == 0 || (startswith(cmd, "whoami ") && cmd[6] == 0)) {
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall1(SYS_EXEC, (uint64_t)"/usr/bin/whoami");
+            printf("whoami: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (strcmp(cmd, "id") == 0 || (startswith(cmd, "id ") && cmd[2] == 0)) {
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall1(SYS_EXEC, (uint64_t)"/usr/bin/newid");
+            printf("id: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "sudo")) {
+        char* p = cmd + 4;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == 0) {
+            printf("usage: sudo COMMAND [ARGS...]\n");
+            return 1;
+        }
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/sudo", (uint64_t)p);
+            printf("sudo: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "su")) {
+        char* p = cmd + 2;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/su", (uint64_t)(*p ? p : ""));
+            printf("su: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "adduser")) {
+        char* p = cmd + 7;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/adduser", (uint64_t)(*p ? p : ""));
+            printf("adduser: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "useradd")) {
+        char* p = cmd + 7;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/adduser", (uint64_t)(*p ? p : ""));
+            printf("useradd: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "deluser")) {
+        char* p = cmd + 7;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/deluser", (uint64_t)(*p ? p : ""));
+            printf("deluser: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (startswith(cmd, "userdel")) {
+        char* p = cmd + 7;
+        while (*p == ' ' || *p == '\t') p++;
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall2(SYS_EXEC, (uint64_t)"/usr/bin/deluser", (uint64_t)(*p ? p : ""));
+            printf("userdel: not found\n");
+            _syscall1(SYS_EXIT, 127);
+        }
+        return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
+    } else if (strcmp(cmd, "passwd") == 0 || (startswith(cmd, "passwd ") && cmd[6] == 0)) {
+        int pid = _syscall0(SYS_FORK);
+        if (pid == 0) {
+            _syscall1(SYS_EXEC, (uint64_t)"/usr/bin/passwd");
+            printf("passwd: not found\n");
             _syscall1(SYS_EXIT, 127);
         }
         return (int)_syscall1(SYS_WAITPID, (uint64_t)pid);
@@ -1051,7 +1160,12 @@ int main(void) {
     printf("Type 'help' for commands\n\n");
 
     while (1) {
-        printf("some-mini-os$ ");
+        const char* user = env_get("USER");
+        char ps = getuid() == 0 ? '#' : '$';
+        if (user && user[0])
+            printf("%c%s@some-mini-os%c ", ps, user, ps);
+        else
+            printf("some-mini-os%c ", ps);
         shell_readline();
         if (line[0]) history_add(line);
         execute(line, 0);

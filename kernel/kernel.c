@@ -111,7 +111,7 @@ static void go_userspace(void) {
 
 void kmain(void) {
     serial_init();
-    serial_write("some-mini-os v0.6.1 booting...\n", 29);
+    serial_write("some-mini-os v0.7 booting...\n", 29);
 
 
 

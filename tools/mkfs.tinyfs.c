@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#define TINYFS_MAGIC        0x53465300ULL
+#define TINYFS_MAGIC        0x53465301ULL
 #define TINYFS_BLOCK_SIZE   4096
 #define TINYFS_INODE_COUNT  64
 #define TINYFS_TOTAL_BLOCKS 16384
@@ -39,6 +39,10 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint16_t mode;
     uint16_t uid;
+    uint16_t gid;
+    uint16_t dev_major;
+    uint16_t dev_minor;
+    uint8_t  padding3[2];
     uint32_t size;
     uint64_t atime;
     uint64_t mtime;
@@ -122,6 +126,7 @@ int main(int argc, char* argv[]) {
     /* inode 0: root directory */
     inodes[0].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[0].uid = 0;
+    inodes[0].gid = 0;
     inodes[0].size = 9 * sizeof(tinyfs_dirent_t);
     inodes[0].atime = 0;
     inodes[0].mtime = 0;
@@ -133,6 +138,7 @@ int main(int argc, char* argv[]) {
     /* inode 1: README.txt */
     inodes[1].mode = TINYFS_TYPE_FILE | TINYFS_MODE_755;
     inodes[1].uid = 0;
+    inodes[1].gid = 0;
     inodes[1].size = 25; /* "welcome to some-mini-os!\n" */
     inodes[1].direct_block = ROOT_DATA_BLOCK + 1;
     inodes[1].refcount = 1;
@@ -140,6 +146,7 @@ int main(int argc, char* argv[]) {
     /* inode 2: hello.txt */
     inodes[2].mode = TINYFS_TYPE_FILE | TINYFS_MODE_755;
     inodes[2].uid = 0;
+    inodes[2].gid = 0;
     inodes[2].size = 13; /* "hello there!\n" */
     inodes[2].direct_block = ROOT_DATA_BLOCK + 2;
     inodes[2].refcount = 1;
@@ -147,6 +154,7 @@ int main(int argc, char* argv[]) {
     /* inode 3: bin directory */
     inodes[3].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[3].uid = 0;
+    inodes[3].gid = 0;
     inodes[3].size = 2 * sizeof(tinyfs_dirent_t);
     inodes[3].direct_block = ROOT_DATA_BLOCK + 3;
     inodes[3].refcount = 1;
@@ -154,6 +162,7 @@ int main(int argc, char* argv[]) {
     /* inode 4: tmp directory */
     inodes[4].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[4].uid = 0;
+    inodes[4].gid = 0;
     inodes[4].size = 2 * sizeof(tinyfs_dirent_t);
     inodes[4].direct_block = ROOT_DATA_BLOCK + 4;
     inodes[4].refcount = 1;
@@ -161,6 +170,7 @@ int main(int argc, char* argv[]) {
     /* Inode 5: dev directory */
     inodes[5].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[5].uid = 0;
+    inodes[5].gid = 0;
     inodes[5].size = 5 * sizeof(tinyfs_dirent_t);
     inodes[5].direct_block = ROOT_DATA_BLOCK + 5;
     inodes[5].refcount = 1;
@@ -168,6 +178,7 @@ int main(int argc, char* argv[]) {
     /* inode 6: home directory */
     inodes[6].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[6].uid = 0;
+    inodes[6].gid = 0;
     inodes[6].size = 2 * sizeof(tinyfs_dirent_t);
     inodes[6].direct_block = ROOT_DATA_BLOCK + 6;
     inodes[6].refcount = 1;
@@ -175,26 +186,33 @@ int main(int argc, char* argv[]) {
     /* inode 7: usr directory */
     inodes[7].mode = TINYFS_TYPE_DIR | TINYFS_MODE_755;
     inodes[7].uid = 0;
+    inodes[7].gid = 0;
     inodes[7].size = 2 * sizeof(tinyfs_dirent_t);
     inodes[7].direct_block = ROOT_DATA_BLOCK + 7;
     inodes[7].refcount = 1;
 
     /* Inode 8: /dev/null - char device major 1 minor 3 */
     inodes[8].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
-    inodes[8].uid = 1;
-    inodes[8].size = 3;
+    inodes[8].uid = 0;
+    inodes[8].gid = 0;
+    inodes[8].dev_major = 1;
+    inodes[8].dev_minor = 3;
     inodes[8].refcount = 1;
 
     /* Inode 9: /dev/zero - char device major 1 minor 5 */
     inodes[9].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
-    inodes[9].uid = 1;
-    inodes[9].size = 5;
+    inodes[9].uid = 0;
+    inodes[9].gid = 0;
+    inodes[9].dev_major = 1;
+    inodes[9].dev_minor = 5;
     inodes[9].refcount = 1;
 
     /* Inode 10: /dev/tty - char device major 5 minor 0 */
     inodes[10].mode = TINYFS_TYPE_CHARDEV | TINYFS_MODE_755;
-    inodes[10].uid = 5;
-    inodes[10].size = 0;
+    inodes[10].uid = 0;
+    inodes[10].gid = 0;
+    inodes[10].dev_major = 5;
+    inodes[10].dev_minor = 0;
     inodes[10].refcount = 1;
 
     write_at(fd, INODE_TABLE_BLOCK * TINYFS_BLOCK_SIZE, inode_table, TINYFS_BLOCK_SIZE * INODE_TABLE_BLOCKS);

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define TINYFS_MAGIC        0x53465300
+#define TINYFS_MAGIC        0x53465301
 #define TINYFS_BLOCK_SIZE   4096
 #define TINYFS_INODE_COUNT  64
 #define TINYFS_MAX_FNAME    28
@@ -35,6 +35,10 @@ typedef struct __attribute__((packed)) tinyfs_superblock {
 typedef struct __attribute__((packed)) tinyfs_inode {
     uint16_t mode;
     uint16_t uid;
+    uint16_t gid;
+    uint16_t dev_major;
+    uint16_t dev_minor;
+    uint8_t  padding3[2];
     uint32_t size;
     uint64_t atime;
     uint64_t mtime;

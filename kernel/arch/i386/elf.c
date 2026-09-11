@@ -10,6 +10,8 @@ int elf_load_into_address_space(uint32_t pd_phys, const char* filename, uint32_t
     void* buf = memory_alloc(ELF_BUF_SIZE);
     if (!buf) return -1;
 
+    if (fs_access(filename, 1) < 0) { memory_free(buf); return -1; }
+
     int n = fs_cat(filename, (char*)buf, ELF_BUF_SIZE);
     if (n <= 0) { memory_free(buf); return -1; }
 
