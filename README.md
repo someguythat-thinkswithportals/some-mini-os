@@ -10,7 +10,7 @@ Some small, open-source, Unix-like operating system
  <img src="screenshots/some-mini-os.png">
 </p>
 
-**some-mini-os** is a unix-like operating system that was made from scratch. has a custom kernel, custom libc known as ```some-libc``` and a custom filesystem. it currently supports x86_64 and i386 as of right now, but there might be more versions of some-mini-os that support other CPU architectures (like powerpc and mips) in the future.
+**some-mini-os** is an open-source unix-like operating system that was made from scratch. it has a custom kernel,has a custom libc known as ```some-libc``` and a custom filesystem. it currently supports x86_64 and i386 as of right now, but there might be more versions of some-mini-os that support other CPU architectures (like powerpc and mips) in the future.
 
 # getting started
 alright, before you can try out the operating system on a virtual machine, you need to install the following software:
@@ -29,7 +29,7 @@ sudo apt install make gcc nasm qemu-system-x86-64 qemu-system-i386
 # arch linux
 sudo pacman -S qemu-system-x86_64 make gcc nasm qemu-system-i386
 ```
-if you use windows you can use the windows subsystem for linux (wsl) to compile the operating system
+if you use windows you can use the windows subsystem for linux (wsl) to compile some-mini-os
 
 anyways, after you installed all of the essential software, its time to compile the OS and run it inside of QEMU
 
